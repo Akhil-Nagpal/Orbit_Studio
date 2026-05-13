@@ -1,4 +1,4 @@
-import mongoose, { Document } from "mongoose";
+import mongoose from "mongoose";
 import mongooseAggregatePaginate from "mongoose-aggregate-paginate-v2";
 import { VideoState } from "../constants";
 
@@ -14,7 +14,7 @@ interface CloudinaryFiles {
 }
 
 // interface must extends Document only when we need mongoose inbuild methods otherwise, No need of that
-export interface IVideo extends Document {
+export interface IVideo {
   videoFile: CloudinaryFiles;
   title: string;
   description: string;
@@ -33,7 +33,7 @@ export interface IVideo extends Document {
   updatedAt: Date;
 }
 
-const videoSchema = new mongoose.Schema(
+const videoSchema = new mongoose.Schema<IVideo>(
   {
     videoFile: {
       url: {

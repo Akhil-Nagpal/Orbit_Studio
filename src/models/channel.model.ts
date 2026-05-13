@@ -17,7 +17,7 @@ export interface IChannel {
   status: ChannelState;
 }
 
-const channelSchema = new mongoose.Schema(
+const channelSchema = new mongoose.Schema<IChannel>(
   {
     owner: {
       type: mongoose.Schema.Types.ObjectId,
