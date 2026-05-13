@@ -1,13 +1,14 @@
 import { Types } from "mongoose";
 import cloudinary from "../config/cloudinary";
 import { Subscription } from "../models/subscription.model";
-import { Video, VideoVisibility } from "../models/video.model";
+import { Video, VideoVisibility, type IVideo } from "../models/video.model";
 import { ApiError } from "../utils/apiError";
 import crypto from "crypto";
 import { View } from "../models/view.model";
 import { Like } from "../models/like.model";
 import { Comment } from "../models/comment.model";
 import { generateThumbnails } from "../utils/generateThumbnails";
+import { VideoState } from "../constants";
 
 interface ChannelProfile {
   _id: string;
@@ -66,9 +67,9 @@ export const getSingleVideoService = async (
 ): Promise<VideoResult> => {
   // find the video which is ready and visible and populate channel with it
   const video = await Video.findOne({
-    _id: videoId,
-    visibility: "PUBLIC",
-    status: "READY",
+    _id: new Types.ObjectId(videoId),
+    visibility: VideoVisibility.PUBLIC,
+    status: VideoState.READY,
   })
     .select(
       "videoFile title description thumbnail duration tags views likesCount commentsCount channel"

@@ -6,7 +6,8 @@ import { Playlist } from "../models/playlist.model";
 import { User } from "../models/user.model";
 import { uploadToCloudinary } from "../utils/uploadToCloudinary";
 import { deleteFromCloudinary } from "../utils/deleteFromCloudinary";
-import { Video } from "../models/video.model";
+import { Video, VideoVisibility } from "../models/video.model";
+import { ChannelState, VideoState } from "../constants";
 
 // interface for update channel info
 interface UpdateChannelInfoPayload {
@@ -174,8 +175,8 @@ export const getChannelInfoService = async (
 ): Promise<ChannelProfileResult> => {
   // find the channel with channel id and status must be active
   const channel = await Channel.findOne({
-    _id: channelId,
-    status: "ACTIVE",
+    _id: new Types.ObjectId(channelId),
+    status: ChannelState.ACTIVE,
   });
   // check if the channel exists or not
   if (!channel) {
@@ -216,7 +217,7 @@ export const getFeaturedContentService = async (
   // find the channel
   const channel = await Channel.findOne({
     _id: channelObjectId,
-    status: "ACTIVE",
+    status: ChannelState.ACTIVE,
   }).select("name");
   // check if the channel exists or not
   if (!channel) {
@@ -251,15 +252,15 @@ export const getFeaturedContentService = async (
             $match: {
               $expr: {
                 $and: [
-                  { $eq: ["$playlist", "$playlistId"] },
+                  { $eq: ["$playlist", "$$playlist"] },
                   { $eq: ["$visibility", "PUBLIC"] },
-                  { $eq: ["status", "ACTIVE"] },
+                  { $eq: ["$status", "ACTIVE"] },
                 ],
               },
             },
           },
           {
-            // stage 6 - add channel anme to evry video
+            // stage 6 - add channel name to evry video
             $addFields: {
               channel: {
                 id: channel._id,
@@ -311,7 +312,10 @@ export const getVideosService = async (
   limit: number
 ) => {
   // get the channel id and find the channel
-  const channel = await Channel.findOne({ _id: channelId, status: "ACTIVE" });
+  const channel = await Channel.findOne({
+    _id: channelId,
+    status: ChannelState.ACTIVE,
+  });
   // check if the channel exists or not
   if (!channel) {
     throw new ApiError(404, "Channel Not Found");
@@ -322,10 +326,14 @@ export const getVideosService = async (
   // so the formula is (2 - 1) * 12 = 12, So skip 12 videos and show next 12 videos
 
   // creating filter for finding videos
-  const filter = {
-    channel: channelId,
-    visibility: "PUBLIC",
-    status: "ACTIVE",
+  const filter: {
+    channel: Types.ObjectId;
+    visibility: VideoVisibility;
+    status: VideoState;
+  } = {
+    channel: new Types.ObjectId(channelId),
+    visibility: VideoVisibility.PUBLIC,
+    status: VideoState.READY,
   };
 
   // fetch videos using Promise.all
@@ -363,9 +371,9 @@ export const getPlaylistsService = async (
   limit: number
 ) => {
   // get the channel id and viewer id and find the channel
-  const channel = Channel.findOne({
-    _id: channelId,
-    status: "ACTIVE",
+  const channel = await Channel.findOne({
+    _id: new Types.ObjectId(channelId),
+    status: ChannelState.ACTIVE,
   });
   // check if channel exists or not
   if (!channel) {
