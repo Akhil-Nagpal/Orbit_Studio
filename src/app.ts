@@ -9,6 +9,7 @@ import subscriptionRoutes from "./routes/subscription.routes";
 import channelRoutes from "./routes/channel.routes";
 import videoRoutes from "./routes/video.routes";
 import playlistRoutes from "./routes/playlist.routes";
+import { globalErrorHandler } from "./middlewares/globalError.middleware";
 
 export const app = express();
 
@@ -42,3 +43,6 @@ app.use("/api/v1/channel", channelRoutes);
 app.use("/api/v1/video", videoRoutes);
 // Playlist Routes
 app.use("/api/v1/playlist", playlistRoutes);
+
+// Global Error Middleware
+app.use(globalErrorHandler);

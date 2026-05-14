@@ -16,6 +16,7 @@ if (!fs.existsSync(logDir)) {
 // -----
 const isProduction = Bun.env.NODE_ENV === "production";
 
+const logLevel = Bun.env.LOG_LEVEL || "info";
 // -----
 // Create Winston Logger
 // -----
@@ -25,7 +26,7 @@ const logger = winston.createLogger({
   // * debug - everything
   // * info - info, warn, error
   // * error - only errors
-  level: isProduction ? "info" : "debug",
+  level: logLevel,
 
   // Set Format
   // This defines hows logs look - like timestamps, error stack trace, in which format
