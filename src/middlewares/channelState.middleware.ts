@@ -19,7 +19,7 @@ export const checkChannelState = async (
     throw new ApiError(401, "Channel not found");
   }
   // check if the channel state is active or not, if not throw error channel is suspended
-  if (channel.state !== ChannelState.ACTIVE) {
+  if (channel.status !== ChannelState.ACTIVE) {
     throw new ApiError(403, "Channel is suspended");
   }
   // pass to the next
