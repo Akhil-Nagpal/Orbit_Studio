@@ -1,12 +1,12 @@
 import { connectDB } from "./db/connect";
 import { app } from "./app";
 
-const Port = Bun.env.PORT || 8000;
+const PORT = Bun.env.PORT || 8000;
 
 connectDB()
   .then(() => {
-    app.listen(Port, () => {
-      console.log("Server is running on Port:", Port);
+    app.listen(PORT, () => {
+      console.log("Server is running on Port:", PORT);
     });
   })
   .catch((error) => {

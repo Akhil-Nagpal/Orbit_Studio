@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import logger from "../utils/logger";
 
 export const connectDB = async (): Promise<void> => {
   try {
@@ -30,16 +31,16 @@ export const connectDB = async (): Promise<void> => {
     };
 
     const connectionInstance = await mongoose.connect(
-      `${Bun.env.MONGO_URI}/${Bun.env.DB_NAME}`,
+      `${Bun.env.MONGODB_URI}/${Bun.env.DB_NAME}`,
       options
     );
-    console.log(
+    logger.info(
       "Database connection established successfully!",
       "Host:",
       connectionInstance.connection.host
     );
   } catch (error) {
-    console.error("Databse connection failed!", error);
+    logger.error("Databse connection failed!", error);
     process.exit(1);
   }
 };
