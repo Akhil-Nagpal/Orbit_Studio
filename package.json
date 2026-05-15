@@ -4,7 +4,9 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "bun run src/index.ts"
+    "dev": "bun run src/index.ts",
+    "build": "tsc -p tsconfig.build.ts",
+    "start": "node dist/index.js"
   },
   "devDependencies": {
     "@types/bcrypt": "^6.0.0",
