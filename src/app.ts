@@ -10,6 +10,7 @@ import channelRoutes from "./routes/channel.routes";
 import videoRoutes from "./routes/video.routes";
 import playlistRoutes from "./routes/playlist.routes";
 import { globalErrorHandler } from "./middlewares/globalError.middleware";
+import { corsOption } from "./config/cors.config";
 
 export const app = express();
 
@@ -17,12 +18,7 @@ export const app = express();
 app.use(express.json({ limit: "16kb" }));
 
 // middleware for cors origin
-app.use(
-  cors({
-    origin: Bun.env.CORS_ORIGIN,
-    credentials: true,
-  })
-);
+app.use(cors(corsOption));
 
 // middleware for Url Encoding - example - this change the link in the browser like akhil+nagpal or akhil%20nagpal
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
