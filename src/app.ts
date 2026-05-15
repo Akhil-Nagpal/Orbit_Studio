@@ -2,6 +2,9 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 
+// Server Readiness Route import
+import systemRoutes from "./routes/system.routes";
+
 // All Route imports
 import authRoutes from "./routes/auth.routes";
 import userRoutes from "./routes/user.routes";
@@ -25,6 +28,9 @@ app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 
 // middleware for cookie-parser
 app.use(cookieParser());
+
+// Service Readiness Endpoints
+app.use("/", systemRoutes);
 
 // All Routes implemented
 // Auth route
