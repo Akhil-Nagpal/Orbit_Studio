@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "bun run src/index.ts",
-    "build": "tsc -p tsconfig.build.ts",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/index.js"
   },
   "devDependencies": {
