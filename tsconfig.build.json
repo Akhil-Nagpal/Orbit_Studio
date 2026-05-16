@@ -2,13 +2,14 @@
   "extends": "./tsconfig.json",
 
   "compilerOptions": {
-    "module": "nodenext",
-    "moduleResolution": "nodenext",
+    "module": "preserve",
+    "moduleResolution": "bundler",
 
     "rootDir": "./src",
     "outDir": "./dist",
 
     "noEmit": false,
+    "rewriteRelativeImportExtensions": true,
 
     "declaration": false,
     "sourceMap": false

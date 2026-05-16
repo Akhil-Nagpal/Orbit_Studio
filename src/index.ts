@@ -9,7 +9,7 @@ connectDB()
     logger.info("Database connected successfully!");
 
     app.listen(PORT, () => {
-      logger.info("Server is running on Port:", PORT);
+      logger.info(`Server is running on Port: ${PORT}`);
     });
   })
   .catch((error) => {

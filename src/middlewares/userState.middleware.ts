@@ -19,7 +19,7 @@ export const checkUserState = async (
     throw new ApiError(401, "User not found");
   }
   // check if the user state is active or not, if not throw error
-  if (user.state !== UserState.ACTIVE) {
+  if (user.status !== UserState.ACTIVE) {
     throw new ApiError(403, "User is Banned");
   }
   // pass to the next
