@@ -26,15 +26,25 @@ import {
   postCommentSchema,
   updateCommentSchema,
 } from "../validations/comment.validation";
+import {
+  commentRateLimiter,
+  uploadRateLimiter,
+  viewRateLimiter,
+} from "../middlewares/rateLimit.middleware";
 
 const router = Router();
 
 // --- Uploading Video ---
 // For directly upload video from frontend I need 3 apis - 1st - signature assigning, 2nd - uploading video / creating video record in DB, 3rd - updating video metadata
 // Assigning browser a signature for authorization
-router.get("/upload-signature", verifyJwt, getUploadSignature);
+router.get(
+  "/upload-signature",
+  verifyJwt,
+  uploadRateLimiter,
+  getUploadSignature
+);
 // Uploading video / Creating video record in DB
-router.post("/upload", verifyJwt, uploadVideo);
+router.post("/upload", verifyJwt, uploadRateLimiter, uploadVideo);
 
 // Get Single Video
 router.get(
@@ -56,6 +66,7 @@ router.patch(
 // view route
 router.post(
   "/:videoId/view",
+  viewRateLimiter,
   optionalAuth,
   validate(videoParamSchema),
   addView
@@ -79,6 +90,7 @@ router.get(
 router.post(
   "/:videoId/comments",
   verifyJwt,
+  commentRateLimiter,
   validate(postCommentSchema),
   postComment
 );
@@ -86,6 +98,7 @@ router.post(
 router.patch(
   "/:videoId/:commentId",
   verifyJwt,
+  commentRateLimiter,
   validate(updateCommentSchema),
   updateComment
 );

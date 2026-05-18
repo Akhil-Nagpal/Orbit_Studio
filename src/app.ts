@@ -14,11 +14,15 @@ import videoRoutes from "./routes/video.routes";
 import playlistRoutes from "./routes/playlist.routes";
 import { globalErrorHandler } from "./middlewares/globalError.middleware";
 import { corsOption } from "./config/cors.config";
+import { apiRateLimiter } from "./middlewares/rateLimit.middleware";
 
 export const app = express();
 
 // middleware for express json limit
 app.use(express.json({ limit: "16kb" }));
+
+// middleware for rate limiting
+app.use(apiRateLimiter);
 
 // middleware for cors origin
 app.use(cors(corsOption));
