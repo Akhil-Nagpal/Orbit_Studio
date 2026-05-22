@@ -18,6 +18,9 @@ import { apiRateLimiter } from "./middlewares/rateLimit.middleware";
 
 export const app = express();
 
+// configuration for express trust proxy (NGINX)
+app.set("trust proxy", 1);
+
 // middleware for express json limit
 app.use(express.json({ limit: "16kb" }));
 
