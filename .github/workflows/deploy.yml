@@ -19,7 +19,10 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
 
           script: |
+            set -e
+
             cd /home/ubuntu/Orbit_Studio
             git pull origin main
+            bun install
             bun run build
             pm2 restart orbit-studio
