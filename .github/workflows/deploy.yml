@@ -27,4 +27,4 @@ jobs:
             git pull origin main
             /home/ubuntu/.bun/bin/bun install
             /home/ubuntu/.bun/bin/bun run build
-            pm2 restart orbit-studio
+            /home/ubuntu/.bun/bin/pm2 restart orbit-studio
