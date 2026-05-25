@@ -5,26 +5,23 @@ on:
     branches:
       - main
 
+concurrency:
+  group: orbit-studio-production
+  cancel-in-progress: true
+
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Deploy Orbit Studio to EC2
-        uses: appleboy/ssh-action@v1.0.3
+        run: |
+          set -e
 
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USERNAME }}
-          key: ${{ secrets.EC2_SSH_KEY }}
+          echo "Starting Deployment..."
 
-          script: |
-            set -e
-
-            echo "Starting Deployment..."
-
-            cd /home/ubuntu/Orbit_Studio
-            git pull origin main
-            /home/ubuntu/.bun/bin/bun install
-            /home/ubuntu/.bun/bin/bun run build
-            /home/ubuntu/.bun/bin/pm2 restart orbit-studio
+          cd /home/ubuntu/Orbit_Studio
+          git pull origin main
+          /home/ubuntu/.bun/bin/bun install
+          /home/ubuntu/.bun/bin/bun run build
+          /home/ubuntu/.bun/bin/pm2 restart orbit-studio
