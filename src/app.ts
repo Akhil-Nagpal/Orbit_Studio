@@ -1,4 +1,8 @@
-import express from "express";
+import express, {
+  type NextFunction,
+  type Request,
+  type Response,
+} from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 
@@ -25,7 +29,12 @@ app.set("trust proxy", 1);
 app.use(express.json({ limit: "16kb" }));
 
 // middleware for rate limiting
-app.use(apiRateLimiter);
+app.use((req: Request, res: Response, next: NextFunction) => {
+  if (req.path === "/health") {
+    return next();
+  }
+  apiRateLimiter(req, res, next);
+});
 
 // middleware for cors origin
 app.use(cors(corsOption));
