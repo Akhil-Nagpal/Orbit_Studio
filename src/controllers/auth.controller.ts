@@ -62,12 +62,12 @@ export const loginUser = asyncHandler(async (req: Request, res: Response) => {
     .cookie("accessToken", accessToken, {
       httpOnly: true,
       sameSite: "strict",
-      secure: true,
+      secure: false,
       maxAge: Number(Bun.env.ACCESS_TOKEN_MAX_AGE),
     })
     .cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: true,
+      secure: false,
       sameSite: "strict",
       maxAge: Number(Bun.env.REFRESH_TOKEN_MAX_AGE),
     })
