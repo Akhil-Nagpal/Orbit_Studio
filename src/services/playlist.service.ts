@@ -70,8 +70,8 @@ export const createPlaylistService = async (
   // get the data from user
   userId: string,
   title: string,
-  visibility: string,
-  description?: string
+  description: string | undefined,
+  visibility: string
 ) => {
   // create the playlist
   const playlistCreated = await Playlist.create({
