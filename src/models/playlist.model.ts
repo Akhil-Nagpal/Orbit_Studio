@@ -8,7 +8,7 @@ export enum PlaylistVisibility {
 export interface IPlaylist extends Document {
   title: string;
   description?: string;
-  owner: mongoose.Types.ObjectId;
+  channel: mongoose.Types.ObjectId;
   videoCount: number;
   status: PlaylistState;
   visibility: PlaylistVisibility;
@@ -22,21 +22,25 @@ const playlistSchema = new mongoose.Schema(
       type: String,
       required: true,
       maxlength: 120,
+      trim: true,
     },
 
     description: {
       type: String,
       maxlength: 2000,
+      default: "",
+      trim: true,
     },
 
-    owner: {
+    channel: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: "Channel",
       required: true,
     },
     videoCount: {
       type: Number,
       default: 0,
+      min: 0,
     },
     visibility: {
       type: String,
@@ -53,6 +57,7 @@ const playlistSchema = new mongoose.Schema(
 );
 
 // Indexes
-playlistSchema.index({ owner: 1, visibility: 1 });
+playlistSchema.index({ channel: 1, visibility: 1 });
+playlistSchema.index({ channel: 1, createdAt: -1 });
 
 export const Playlist = mongoose.model("Playlist", playlistSchema);

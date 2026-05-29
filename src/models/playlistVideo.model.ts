@@ -31,6 +31,6 @@ playlistVideoSchema.index({ playlist: 1, video: 1 }, { unique: true }); // No du
 playlistVideoSchema.index({ playlist: 1, position: 1 }); // For video pagination
 
 export const PlaylistVideo = mongoose.model<IPlaylistVideo>(
-  "PalylistVideo",
+  "PlaylistVideo",
   playlistVideoSchema
 );
