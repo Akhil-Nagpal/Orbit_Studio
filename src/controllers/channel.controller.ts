@@ -106,25 +106,29 @@ export const getVideos = asyncHandler(async (req: Request, res: Response) => {
 // Get all the channel Palylists
 export const getPlaylists = asyncHandler(
   async (req: Request, res: Response) => {
-    // get the channel id and viewer id
+    // get channel id
     const { channelId } = req.params;
-    const viewerId = req.user?._id;
-    // check if both id's exists or not
+
+    // check if the channelId received or not
     if (!channelId) {
-      throw new ApiError(401, "Channel ID is required");
+      throw new ApiError(400, "Channel ID is required");
     }
 
+    // get viewer id
+    const viewerId = req.user?._id;
+
+    // check if the viewerId recieved or not
     if (!viewerId) {
-      throw new ApiError(400, "Unauthorized request");
+      throw new ApiError(401, "Unauthorized request");
     }
-    // get the page and limit query params
-    const { page, limit } = req.query;
+
+    // get query params from request and also set deafult values
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+
     // call the service
-    const playlists = await getPlaylistsService(
-      channelId,
-      Number(page),
-      Number(limit)
-    );
+    const playlists = await getPlaylistsService(channelId, page, limit);
+
     // give back the response to the client
     res
       .status(200)

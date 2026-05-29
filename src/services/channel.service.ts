@@ -370,21 +370,23 @@ export const getPlaylistsService = async (
   page: number = 1,
   limit: number = 10
 ) => {
-  // get the channel id and viewer id and find the channel
+  // get the channel
   const channel = await Channel.findOne({
     _id: new Types.ObjectId(channelId),
     status: ChannelState.ACTIVE,
   });
-  // check if channel exists or not
+
+  // check if the channel exists or not
   if (!channel) {
     throw new ApiError(404, "Channel Not Found!");
   }
+
   // Calculate offset pagination
   const skip = (page - 1) * limit;
 
   // creating filter for finding playlists
   const filter = {
-    channel: channel._id,
+    channel: new Types.ObjectId(channelId),
     visibility: "PUBLIC",
     status: "ACTIVE",
   };
@@ -402,6 +404,7 @@ export const getPlaylistsService = async (
 
   // Calculate Total Pages
   const totalPages = Math.ceil(totalPlaylists / limit);
+
   // return the playlists with pagination
   return {
     playlists,
