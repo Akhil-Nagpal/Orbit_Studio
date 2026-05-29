@@ -1,6 +1,8 @@
 import type { Request, Response } from "express";
 import { asyncHandler } from "../utils/asyncHandler";
 import { ApiError } from "../utils/apiError";
+import { ApiResponse } from "../utils/apiResponse";
+
 import {
   addVideoService,
   createPlaylistService,
@@ -9,59 +11,52 @@ import {
   getSinglePlaylistService,
   updatePlaylistService,
 } from "../services/playlist.service";
-import { ApiResponse } from "../utils/apiResponse";
-import { templateLiteral } from "zod";
 
+// Get single playlist
 export const getSinglePlaylist = asyncHandler(
   async (req: Request, res: Response) => {
-    // get the playlistId and user Id
     const { playlistId } = req.params;
-    // check if the playlistId exists or not
+
     if (!playlistId) {
-      throw new ApiError(401, "Playlist ID is required");
+      throw new ApiError(400, "Playlist ID is required");
     }
 
-    const userId = req.user?._id;
-    // get page and limit from query
-    const { page, limit } = req.query;
+    const userId = req.user?._id?.toString();
 
-    // call the service
+    const page = Number(req.query.page) || 1;
+    const limit = Number(req.query.limit) || 10;
+
     const playlist = await getSinglePlaylistService(
       playlistId,
-      Number(page),
-      Number(limit),
-      userId?.toString()
+      page,
+      limit,
+      userId
     );
-    // give back the response to the client
+
     res
       .status(200)
       .json(new ApiResponse(200, "Playlist fetched successfully", playlist));
   }
 );
 
-// Create Playlist
+// Create playlist
 export const createPlaylist = asyncHandler(
   async (req: Request, res: Response) => {
-    // get the userId
     const userId = req.user?._id;
-    // check if the user exists or not
+
     if (!userId) {
-      throw new ApiError(401, "Unauthorized Resquest");
+      throw new ApiError(401, "Unauthorized request");
     }
-    // get the Playlist data from req.body
+
     const { title, description, visibility } = req.body;
-    // check if the data is missing or not
-    if (!title || title.trim() === "") {
-      throw new ApiError(400, "Title is required");
-    }
-    // call the service
+
     const createdPlaylist = await createPlaylistService(
       userId.toString(),
       title,
       description,
       visibility
     );
-    // give back the reposne to the client
+
     res
       .status(201)
       .json(
@@ -70,91 +65,88 @@ export const createPlaylist = asyncHandler(
   }
 );
 
-// Add Video to Playlist
+// Add video to playlist
 export const addVideo = asyncHandler(async (req: Request, res: Response) => {
-  // get the playlistId, videoId and userId
   const userId = req.user?._id;
-  const { playlistId } = req.params;
-  const { videoId } = req.body;
-  // check if the user exists or not
+
   if (!userId) {
     throw new ApiError(401, "Unauthorized request");
   }
-  // check if the videoId and playlistId are valid or not
+
+  const { playlistId } = req.params;
+  const { videoId } = req.body;
+
   if (!playlistId) {
     throw new ApiError(400, "Playlist ID is required");
   }
+
   if (!videoId) {
     throw new ApiError(400, "Video ID is required");
   }
-  // call the service
-  const videoAdded = await addVideoService(
+
+  const addedVideo = await addVideoService(
     playlistId,
     videoId,
     userId.toString()
   );
-  // give back the response to the client
+
   res
     .status(200)
-    .json(new ApiResponse(200, "Video added successfully", videoAdded));
+    .json(new ApiResponse(200, "Video added successfully", addedVideo));
 });
 
-// Delete video from playlist
+// Delete video
 export const deleteVideo = asyncHandler(async (req: Request, res: Response) => {
-  // get the userId
   const userId = req.user?._id;
-  // check if the user exists or not
+
   if (!userId) {
-    throw new ApiError(401, "unauthorized request");
+    throw new ApiError(401, "Unauthorized request");
   }
-  // get the playlist and video Id
+
   const { playlistId, videoId } = req.params;
-  // check if the id's exists or not
+
   if (!playlistId) {
     throw new ApiError(400, "Playlist ID is required");
   }
+
   if (!videoId) {
     throw new ApiError(400, "Video ID is required");
   }
-  // call the service
+
   await deleteVideoService(playlistId, videoId, userId.toString());
-  // give back the response to the client
+
   res
-    .status(204)
-    .json(new ApiResponse(204, "Video deleted successfully", null));
+    .status(200)
+    .json(new ApiResponse(200, "Video deleted successfully", null));
 });
 
-// Update Playlist
+// Update playlist
 export const updatePlaylist = asyncHandler(
   async (req: Request, res: Response) => {
-    // get the playlist id and user id
     const userId = req.user?._id;
-    const { playlistId } = req.params;
-    // check if the user exists or not
+
     if (!userId) {
-      throw new ApiError(401, "Unauthorized Request");
-    }
-    // check if the Playlist exists or not
-    if (!playlistId) {
-      throw new ApiError(400, "Playlist Id is required");
+      throw new ApiError(401, "Unauthorized request");
     }
 
-    // get the data to update
+    const { playlistId } = req.params;
+
+    if (!playlistId) {
+      throw new ApiError(400, "Playlist ID is required");
+    }
+
     const { title, description, visibility } = req.body;
-    // check if the data exists or not
-    if (!title || title.trim() === "") {
-      throw new ApiError(400, "Title is required");
-    }
-    if (!visibility) {
-      throw new ApiError(400, "Visibility is required");
-    }
-    // call the service
+
     const updatedPlaylist = await updatePlaylistService(
       playlistId,
       userId.toString(),
-      { title, description, visibility }
+      {
+        title,
+        description,
+        visibility,
+      }
     );
-    // give back the response to the client
+
     res
       .status(200)
       .json(
@@ -163,25 +155,25 @@ export const updatePlaylist = asyncHandler(
   }
 );
 
-// Delete Playlist
+// Delete playlist
 export const deletePlaylist = asyncHandler(
   async (req: Request, res: Response) => {
-    // get the userId and Playlist id
     const userId = req.user?._id;
-    const { playlistId } = req.params;
-    // check if the user exists or not
+
     if (!userId) {
       throw new ApiError(401, "Unauthorized request");
     }
-    // check if the playlist exists or not
+
+    const { playlistId } = req.params;
+
     if (!playlistId) {
       throw new ApiError(400, "Playlist ID is required");
     }
-    // call the service
+
     await deletePlaylistService(playlistId, userId.toString());
-    // give back the response to the client
+
     res
       .status(200)
-      .json(new ApiResponse(200, "Playlist Deleted Successfully", null));
+      .json(new ApiResponse(200, "Playlist deleted successfully", null));
   }
 );

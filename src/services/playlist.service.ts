@@ -1,7 +1,9 @@
 import mongoose from "mongoose";
 import { Playlist } from "../models/playlist.model";
+import { Channel } from "../models/channel.model";
 import { PlaylistVideo } from "../models/playlistVideo.model";
 import { ApiError } from "../utils/apiError";
+import { ChannelState } from "../constants";
 
 interface UpdatePlaylistPayload {
   title: string;
@@ -20,8 +22,19 @@ export const getSinglePlaylistService = async (
   if (!playlist) {
     throw new ApiError(404, "Playlist Not Found");
   }
-  // check ownership - what this does if the userId exists only then check
-  const isOwner = !!userId && playlist.owner.toString() === userId;
+  // check ownership - through channel
+  let isOwner = false;
+
+  if (userId) {
+    const channel = await Channel.findOne({
+      owner: userId,
+      status: ChannelState.ACTIVE,
+    });
+
+    isOwner =
+      !!channel && playlist.channel.toString() === channel._id.toString();
+  }
+
   // check visibility
   if (playlist.visibility === "PRIVATE" && !isOwner) {
     throw new ApiError(403, "Access Denied");
@@ -30,7 +43,7 @@ export const getSinglePlaylistService = async (
   const skip = (page - 1) * limit;
 
   // get every playlistVideo
-  const [playlistVideos, totalPlaylistVideos]: [any[], number] = // [any[], number] is used to give type safety to totalPlaylistVideos cause it was showing undefined. NOTE: this solution is given by chatgpt and I don't know what the fuck is this "yet".
+  const [playlistVideos, totalPlaylistVideos]: [any[], number] = // [any[], number] is used to give type safety to totalPlaylistVideos cause it was showing undefined. NOTE: this solution is given by chatgpt and I don't know what the fuck is this "YET".
     await Promise.all([
       PlaylistVideo.find({ playlist: playlistId })
         .sort({ position: 1 })
@@ -47,7 +60,7 @@ export const getSinglePlaylistService = async (
   return {
     playlist: {
       _id: playlist._id,
-      titlae: playlist.title,
+      title: playlist.title,
       description: playlist.description,
       visibility: playlist.visibility,
       createdAt: playlist.createdAt,
@@ -73,9 +86,19 @@ export const createPlaylistService = async (
   description: string | undefined,
   visibility: string
 ) => {
+  // find the channel
+  const channel = await Channel.findOne({
+    owner: userId,
+    status: ChannelState.ACTIVE,
+  });
+
+  // check if the channel exists or not
+  if (!channel) {
+    throw new ApiError(404, "Channel not Found");
+  }
   // create the playlist
   const playlistCreated = await Playlist.create({
-    owner: userId,
+    channel: channel._id,
     title,
     description,
     visibility,
@@ -92,9 +115,18 @@ export const addVideoService = async (
   userId: string
 ) => {
   try {
+    // get the channel
+    const channel = await Channel.findOne({
+      owner: userId,
+      status: ChannelState.ACTIVE,
+    });
+    // check if the channel exusts or not
+    if (!channel) {
+      throw new ApiError(404, "Channel Not Found");
+    }
     // get the playlist and update the video counter
     const playlist = await Playlist.findByIdAndUpdate(
-      { _id: playlistId, owner: userId },
+      { _id: playlistId, channel: channel._id },
       { $inc: { videoCount: 1 } },
       { new: true }
     );
@@ -118,7 +150,7 @@ export const addVideoService = async (
       await Playlist.findByIdAndUpdate(playlistId, {
         $inc: { videoCount: -1 },
       });
-      throw new ApiError(400, "Video already in playlist");
+      throw new ApiError(400, "Video already exists in playlist");
     }
     throw error;
   }
@@ -131,10 +163,19 @@ export const deleteVideoService = async (
   videoId: string,
   userId: string
 ) => {
-  // find the playlist and check ownership
-  const playlist = await Playlist.findById({
-    playlist: playlistId,
+  // get the channel
+  const channel = await Channel.findOne({
     owner: userId,
+    status: ChannelState.ACTIVE,
+  });
+  // check if the channel exists or not
+  if (!channel) {
+    throw new ApiError(404, "Chnnel Not Found");
+  }
+  // find the playlist and check ownership
+  const playlist = await Playlist.findOne({
+    _id: playlistId,
+    channel: channel._id,
   });
   // check if the playlist exists or not
   if (!playlist) {
@@ -158,8 +199,20 @@ export const updatePlaylistService = async (
   userId: string,
   { title, visibility, description }: UpdatePlaylistPayload
 ) => {
+  // get the channel
+  const channel = await Channel.findOne({
+    owner: userId,
+    status: ChannelState.ACTIVE,
+  });
+  // check if the channel exists or not
+  if (!channel) {
+    throw new ApiError(404, "Channel Not Found");
+  }
   // find the playlist by id and check ownership
-  const playlist = await Playlist.findOne({ _id: playlistId, owner: userId });
+  const playlist = await Playlist.findOne({
+    _id: playlistId,
+    channel: channel._id,
+  });
 
   if (!playlist) {
     throw new ApiError(404, "Playlist Not Found");
@@ -173,11 +226,7 @@ export const updatePlaylistService = async (
   await playlist.save();
 
   // return the updated playlist
-  return {
-    title: playlist.title,
-    description: playlist.description,
-    visibility: playlist.visibility,
-  };
+  return playlist;
 };
 
 // Delete Playlist
@@ -191,10 +240,19 @@ export const deletePlaylistService = async (
   try {
     // add transaction
     session.startTransaction();
+    // get the channel
+    const channel = await Channel.findOne({
+      owner: userId,
+      status: ChannelState.ACTIVE,
+    });
+    // check if the channel exists or not
+    if (!channel) {
+      throw new ApiError(404, "Channel Not Found");
+    }
     // find the playlist and check ownership
     const playlist = await Playlist.findOne({
       _id: playlistId,
-      owner: userId,
+      channel: channel._id,
     }).session(session);
     // check if playlist exists or not
     if (!playlist) {
@@ -205,9 +263,7 @@ export const deletePlaylistService = async (
       await PlaylistVideo.deleteMany({ playlist: playlistId }).session(session);
     }
     // delete the Playlist
-    await Playlist.deleteOne({ _id: playlistId, owner: userId }).session(
-      session
-    );
+    await Playlist.deleteOne({ _id: playlistId }).session(session);
     // end session and transaction
     await session.commitTransaction();
     session.endSession();
