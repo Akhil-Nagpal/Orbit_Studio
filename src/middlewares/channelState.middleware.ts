@@ -13,7 +13,7 @@ export const checkChannelState = async (
   // check if the user logged in or not, if not jump to next
   if (!userId) return next();
   // find the channel be userId and select the state
-  const channel = await Channel.findOne({ owner: userId }).select("state");
+  const channel = await Channel.findOne({ owner: userId }).select("status");
   // check if channel exists or not
   if (!channel) {
     throw new ApiError(401, "Channel not found");

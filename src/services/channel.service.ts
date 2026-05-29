@@ -367,8 +367,8 @@ export const getVideosService = async (
 // Get Channel Playlists
 export const getPlaylistsService = async (
   channelId: string,
-  page: number,
-  limit: number
+  page: number = 1,
+  limit: number = 10
 ) => {
   // get the channel id and viewer id and find the channel
   const channel = await Channel.findOne({
@@ -384,7 +384,7 @@ export const getPlaylistsService = async (
 
   // creating filter for finding playlists
   const filter = {
-    channel: channelId,
+    channel: channel._id,
     visibility: "PUBLIC",
     status: "ACTIVE",
   };
@@ -395,7 +395,7 @@ export const getPlaylistsService = async (
       .sort({ createdAt: -1, _id: -1 })
       .skip(skip)
       .limit(limit)
-      .select("title thumbnail videos, createdAt"),
+      .select("title description visibility thumbnail videoCount createdAt"),
 
     Playlist.countDocuments(filter),
   ]);
