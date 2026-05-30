@@ -8,8 +8,8 @@ export const rateLimitConfig = {
     limit: 300, // added limit withing 15 min's of window
   },
   auth: {
-    windowMs: 10 * 60 * 1000, // 10 minutes time window
-    limit: 5, // added limit for auth
+    windowMs: 15 * 60 * 1000, // 10 minutes time window
+    limit: 10, // added limit for auth
   },
   upload: {
     windowMs: 60 * 60 * 1000, // 60 minutes time window
