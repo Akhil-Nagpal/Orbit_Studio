@@ -1,10 +1,8 @@
 import mongoose from "mongoose";
-import cloudinary from "../config/cloudinary";
 import { User } from "../models/user.model";
 import { WatchHistory } from "../models/watchHistory.model";
 import { ApiError } from "../utils/apiError";
 import { deleteFromCloudinary } from "../utils/deleteFromCloudinary";
-import { uploadToCloudinary } from "../utils/uploadToCloudinary";
 import { Channel } from "../models/channel.model";
 import { Video } from "../models/video.model";
 import { Like } from "../models/like.model";
@@ -77,45 +75,6 @@ export const updateUserService = async (
     throw error;
   }
 };
-
-// Upload avatar Service
-// export const updateAvatarService = async (userId: string, filePath: string) => {
-//   try {
-//     // get the user form userId
-//     const user = await User.findById(userId);
-//     // check if user exists or not
-//     if (!user) {
-//       throw new ApiError(401, "User does not exist");
-//     }
-//     // upload the file
-//     const uploadedAvatar = await uploadToCloudinary(filePath);
-
-//     // check if file uploaded or not
-//     if (!uploadedAvatar || !uploadedAvatar.url || !uploadedAvatar.public_id) {
-//       throw new ApiError(500, "Avatar upload failed");
-//     }
-
-//     // check if there a file exists if yes then delete the previous file using public id
-//     if (user.avatar?.publicId) {
-//       await deleteFromCloudinary(user.avatar.publicId);
-//     }
-
-//     // update & save the user in DB
-//     user.avatar = {
-//       url: uploadedAvatar?.url,
-//       publicId: uploadedAvatar?.public_id,
-//     };
-//     await user.save({ validateBeforeSave: false });
-
-//     // return the upodatedAvatar method
-//     return { url: uploadedAvatar?.url, publicId: uploadedAvatar?.public_id };
-//   } catch (error) {
-//     console.error("Update avatar service failed");
-//     throw error;
-//   }
-// };
-
-// Update Cover Image Service
 
 // Change password Service
 export const changePasswordService = async (
