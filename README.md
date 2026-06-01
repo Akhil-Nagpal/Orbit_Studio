@@ -526,6 +526,7 @@ Thresholds:
 - [ ] Video transcoding pipeline (FFmpeg)
 - [x] CI/CD with GitHub Actions (self-hosted runner)
 - [ ] Docker containerization
+- [ ] API documentation (Swagger / Postman collection)
 - [ ] Search functionality
 - [ ] Notification system
 - [ ] Admin dashboard
