@@ -21,10 +21,13 @@ import { Channel } from "../models/channel.model";
 // Get Videos for home feed from all channels
 export const getFeed = asyncHandler(async (req: Request, res: Response) => {
   // get the page and limit for pagination
-  const { page, limit } = req.params;
+  const { page, limit } = req.query;
   // Call the service
   const feedFetched = getFeedService(Number(page), Number(limit));
   // give back the response to the client
+  res
+    .status(200)
+    .json(new ApiResponse(200, "Feed Fetched Successfully", feedFetched));
 });
 
 // Get Single Video
