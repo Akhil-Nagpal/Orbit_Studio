@@ -6,6 +6,13 @@ export const videoParamSchema = z.object({
   }),
 });
 
+export const VideoQuerySchema = z.object({
+  query: z.object({
+    page: z.string().default("1").transform(Number),
+    limit: z.string().default("12").transform(Number),
+  }),
+});
+
 export const UploadVideoSchema = z.object({
   videoFile: z.object({
     url: z.url(),

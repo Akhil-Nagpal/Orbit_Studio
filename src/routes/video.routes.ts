@@ -19,6 +19,7 @@ import { validate } from "../middlewares/validation.middleware";
 import {
   updateMetadataSchema,
   videoParamSchema,
+  VideoQuerySchema,
 } from "../validations/video.validation";
 import { verifyJwt } from "../middlewares/auth.middleware";
 import {
@@ -48,7 +49,7 @@ router.get(
 router.post("/upload", verifyJwt, uploadRateLimiter, uploadVideo);
 
 // Get Videos for Home Feed
-router.get("/", optionalAuth, getFeed);
+router.get("/", optionalAuth, validate(VideoQuerySchema), getFeed);
 
 // Get Single Video
 router.get(
