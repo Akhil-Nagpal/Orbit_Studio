@@ -59,6 +59,45 @@ interface MetadataPayload {
   visibility: string;
 }
 
+// Get home feed videos service
+export const getFeedService = async (page: number, limit: number) => {
+  // Calculate offset pagination
+  const skip = (page - 1) * limit;
+  // create filter to find the relevant and available videos
+  const filter: { visibility: VideoVisibility; status: VideoState } = {
+    visibility: VideoVisibility.PUBLIC,
+    status: VideoState.READY,
+  };
+  // fetch all videos using promise.all with pagination and latest videos first
+  const [videos, totalVideos] = await Promise.all([
+    Video.find(filter)
+      .sort({ createdAt: -1, _id: -1 })
+      .skip(skip)
+      .limit(limit)
+      .select("title thumbnail duration views createdAt channel")
+      .populate({
+        path: "channel",
+        select: "name avatar",
+      }),
+
+    // Calculate Total Videos
+    Video.countDocuments(filter),
+  ]);
+  // Calculate Total Pages for pagination
+  const totalPages = Math.ceil(totalVideos / limit);
+  // return the videos including pagination
+  return {
+    videos,
+    pagination: {
+      page,
+      limit,
+      totalVideos,
+      totalPages,
+      hasNextPage: page < totalPages,
+    },
+  };
+};
+
 // Get single video service
 export const getSingleVideoService = async (
   // get the id's
