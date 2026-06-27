@@ -5,6 +5,7 @@ import {
   addViewService,
   deleteCommentService,
   getCommentsService,
+  getFeedService,
   getRelatedVideosService,
   getSingleVideoService,
   getUploadSignatureService,
@@ -16,6 +17,15 @@ import {
 } from "../services/video.service";
 import { ApiResponse } from "../utils/apiResponse";
 import { Channel } from "../models/channel.model";
+
+// Get Videos for home feed from all channels
+export const getFeed = asyncHandler(async (req: Request, res: Response) => {
+  // get the page and limit for pagination
+  const { page, limit } = req.params;
+  // Call the service
+  const feedFetched = getFeedService(Number(page), Number(limit));
+  // give back the response to the client
+});
 
 // Get Single Video
 export const getSingleVideo = asyncHandler(

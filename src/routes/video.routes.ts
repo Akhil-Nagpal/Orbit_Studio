@@ -5,6 +5,7 @@ import {
   addView,
   deleteComment,
   getComments,
+  getFeed,
   getRelatedVideos,
   getSingleVideo,
   getUploadSignature,
@@ -45,6 +46,9 @@ router.get(
 );
 // Uploading video / Creating video record in DB
 router.post("/upload", verifyJwt, uploadRateLimiter, uploadVideo);
+
+// Get Videos for Home Feed
+router.get("/", optionalAuth, getFeed);
 
 // Get Single Video
 router.get(
