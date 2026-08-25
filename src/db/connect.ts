@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import Redis from "ioredis";
 import logger from "../utils/logger";
 
 export const connectDB = async (): Promise<void> => {
@@ -44,3 +45,27 @@ export const connectDB = async (): Promise<void> => {
     process.exit(1);
   }
 };
+
+// Redis Connection Configuration
+export const redis = new Redis(Bun.env.REDIS_URL! as string, {
+  // Retry options
+  maxRetriesPerRequest: 3,
+  retryStrategy: (times) => {
+    const delay = Math.min(times * 100, 3000); // Delay is set to determine the retry frequency caped to 3s
+    return delay;
+  },
+
+  // Connection behaviour options
+  enableOfflineQueue: true, // Queue commands while reconnecting instead of failing instantly
+  lazyConnect: false, // Connect immediately on startup, not on first command
+});
+
+// Connect Redis
+redis.on("connect", () => {
+  logger.info("Redis Connected Successfully!");
+});
+
+// Grab the connection error
+redis.on("error", (err) => {
+  logger.error("Redis Connection Failed!", err);
+});
