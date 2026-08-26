@@ -9,6 +9,7 @@ import { Like } from "../models/like.model";
 import { Comment } from "../models/comment.model";
 import { View } from "../models/view.model";
 import { Subscription } from "../models/subscription.model";
+import { getCached, invalidateCache, setCached } from "./redis.service";
 
 // Interface for Updating User
 interface updateUserPayload {
@@ -26,12 +27,20 @@ interface ChangePassword {
 // Get Current User Service
 export const getCurrentUserService = async (userId: string) => {
   try {
+    // check for redis cache first
+    const cachedUserProfile = await getCached(`user-profile:${userId}`);
+    // check if the cache exists or not if not then query to DB
+    if (cachedUserProfile) {
+      return cachedUserProfile;
+    }
     // get the user from db and sanitize it
     const user = await User.findById(userId).select("-password -refreshToken");
     // check if user exists or not
     if (!user) {
       throw new ApiError(401, "User does not exist");
     }
+    // set the data to redis if redis cache miss
+    await setCached(`user-profile:${userId}`, user, 300);
     // return the user
     return user;
   } catch (error) {
@@ -68,6 +77,11 @@ export const updateUserService = async (
       },
       { new: true, runValidators: true, omitUndefined: true } // NOTE: "omitUndefined is a method of mongoose which remove all the fields stritly have the value of undefined"
     ).select("-password -refreshToken");
+
+    // after updating the profile invalidate the cache
+    await invalidateCache(`user-profile:${userId}`);
+    // then set the updated user data to the redis
+    await setCached(`user-profile:${userId}`, updatedUser, 300);
 
     // Return the sanitized user
     return updatedUser;
@@ -163,6 +177,9 @@ export const deleteUserService = async (userId: string) => {
     // commit transaction
     await session.commitTransaction();
     session.endSession();
+
+    // after deleting everything and transaction being successfull, delete the redis cache
+    await invalidateCache(`user-profile:${userId}`);
   } catch (error) {
     // if something fails abort the transaction and rollback
     await session.abortTransaction();
