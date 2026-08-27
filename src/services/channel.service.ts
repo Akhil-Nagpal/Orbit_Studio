@@ -8,6 +8,7 @@ import { uploadToCloudinary } from "../utils/uploadToCloudinary";
 import { deleteFromCloudinary } from "../utils/deleteFromCloudinary";
 import { Video, VideoVisibility } from "../models/video.model";
 import { ChannelState, VideoState } from "../constants";
+import { getCached, setCached } from "./redis.service";
 
 // interface for update channel info
 interface UpdateChannelInfoPayload {
@@ -47,20 +48,45 @@ interface FeaturedPlaylistResult {
   }>;
 }
 
+// Get Channel Info Service
 export const getChannelInfoService = async (
   // get the channel Id and viewerId
   channelId: string,
   viewerId: string
 ): Promise<ChannelProfileResult> => {
-  // find the channel with channel id and status must be active
-  const channel = await Channel.findOne({
-    _id: new Types.ObjectId(channelId),
-    status: ChannelState.ACTIVE,
-  });
-  // check if the channel exists or not
-  if (!channel) {
-    throw new ApiError(404, "Channel not found");
+  // fetch the channel data from redis cache
+  let channelData: ChannelProfileResult["channel"] | null = await getCached(
+    `channel-profile:${channelId}`
+  );
+  // check if the cached data exists or not, if noe then call the DB
+
+  if (!channelData) {
+    // find the channel with channel id and status must be active
+    const channel = await Channel.findOne({
+      _id: new Types.ObjectId(channelId),
+      status: ChannelState.ACTIVE,
+    });
+
+    // check if the channel exists or not
+    if (!channel) {
+      throw new ApiError(404, "Channel not found");
+    }
+
+    // shape the channel in channel data
+    channelData = {
+      id: channel._id.toString(),
+      name: channel.name,
+      handle: channel.handle,
+      bio: channel.bio,
+      avatar: channel.avatar?.url ?? "",
+      coverImage: channel.coverImage?.url ?? "",
+      subscribersCount: channel.subscriberCount,
+    };
+
+    // set the new data to redis
+    await setCached(`channel-profile:${channelId}`, channelData, 300);
   }
+
   // check if the viewer subscribed this channel or not
   let isSubscribed = false;
 
@@ -74,15 +100,7 @@ export const getChannelInfoService = async (
   }
   // return the response
   return {
-    channel: {
-      id: channel._id.toString(),
-      name: channel.name,
-      handle: channel.handle,
-      bio: channel.bio,
-      avatar: channel.avatar?.url ?? "",
-      coverImage: channel.coverImage?.url ?? "",
-      subscribersCount: channel.subscriberCount,
-    },
+    channel: channelData,
     isSubscribed,
   };
 };
@@ -139,7 +157,7 @@ export const getFeaturedContentService = async (
             },
           },
           {
-            // stage 6 - add channel name to evry video
+            // stage 6 - add channel name to every video
             $addFields: {
               channel: {
                 id: channel._id,
