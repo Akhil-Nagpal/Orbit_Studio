@@ -80,8 +80,6 @@ export const updateUserService = async (
 
     // after updating the profile invalidate the cache
     await invalidateCache(`user-profile:${userId}`);
-    // then set the updated user data to the redis
-    await setCached(`user-profile:${userId}`, updatedUser, 300);
 
     // Return the sanitized user
     return updatedUser;
@@ -153,7 +151,7 @@ export const deleteUserService = async (userId: string) => {
         Comment.deleteMany({ video: { $in: videoIds } }).session(session),
         View.deleteMany({ video: { $in: videoIds } }).session(session),
         Subscription.deleteMany({ channel: channel._id }).session(session),
-        Video.deleteMany({ video: { $in: videoIds } }).session(session),
+        Video.deleteMany({ _id: { $in: videoIds } }).session(session),
       ]);
       // after deleting the channel data delete the cloud assests like avatar & cover image
       if (channel?.avatar?.publicId) {
@@ -202,7 +200,6 @@ export const getWatchHistoryService = async (
   // filter to find the watch history
   const filter = {
     user: userId,
-    status: "ACTIVE",
   };
 
   // get all the watch history
@@ -245,7 +242,7 @@ export const updateWatchHistoryService = async (
       user: userId,
       video: videoId,
     },
-    { watchedAt: -1 },
+    { watchedAt: new Date() },
     { upsert: true, new: true }
   );
   // return the updated history
