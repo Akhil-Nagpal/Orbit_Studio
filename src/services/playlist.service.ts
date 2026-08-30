@@ -105,6 +105,10 @@ export const createPlaylistService = async (
     description,
     visibility,
   });
+
+  // after creating the playlist, invalidate the cached data
+  await invalidateCache(`channel-featured-content:${channel._id}`);
+
   // return the created Playlist
   return playlistCreated;
 };
@@ -192,8 +196,12 @@ export const deleteVideoService = async (
     playlist: playlistId,
     video: videoId,
   });
+
   // decrement video count from playlist
   await Playlist.findByIdAndUpdate(playlistId, { $inc: { videoCount: -1 } });
+
+  // after deleting the video, invalidate the cache
+  await invalidateCache(`channel-featured-content:${channel._id}`);
 
   return;
 };
@@ -237,6 +245,9 @@ export const updatePlaylistService = async (
   // save the playlist after updation
   await playlist.save({ validateBeforeSave: false });
 
+  // after updating playlist, invalidate the cache
+  await invalidateCache(`channel-featured-content:${channel._id}`);
+
   // return the updated playlist
   return playlist;
 };
@@ -278,7 +289,11 @@ export const deletePlaylistService = async (
     await Playlist.deleteOne({ _id: playlistId }).session(session);
     // end session and transaction
     await session.commitTransaction();
+
     session.endSession();
+
+    // after deleting the playlist, invalidate the cache
+    await invalidateCache(`channel-featured-content:${channel._id}`);
   } catch (error) {
     // if something breaks abort and end session
     await session.abortTransaction();
