@@ -9,8 +9,16 @@ export const subscribeService = async (
   subscriberId: string,
   channelId: string
 ): Promise<void> => {
+  // get the channel
+  const channel = await Channel.findById(channelId);
+
+  // check if the channel exists or not
+  if (!channel) {
+    throw new ApiError(404, "Channel Not Found!");
+  }
+
   // check if the user subscribed to itself
-  if (subscriberId === channelId) {
+  if (subscriberId === channel.owner.toString()) {
     throw new ApiError(400, "You cannot subscribe to yourself");
   }
   try {
