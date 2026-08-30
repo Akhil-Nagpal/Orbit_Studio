@@ -8,7 +8,7 @@ import { uploadToCloudinary } from "../utils/uploadToCloudinary";
 import { deleteFromCloudinary } from "../utils/deleteFromCloudinary";
 import { Video, VideoVisibility } from "../models/video.model";
 import { ChannelState, VideoState } from "../constants";
-import { getCached, setCached } from "./redis.service";
+import { getCached, invalidateCache, setCached } from "./redis.service";
 
 // interface for update channel info
 interface UpdateChannelInfoPayload {
@@ -30,12 +30,11 @@ interface ChannelProfileResult {
 }
 interface FeaturedPlaylistResult {
   featuredPlaylist: Array<{
-    id: string;
+    _id: string;
     title: string;
     videos: Array<{
       _id: string;
       title: string;
-      desription: string;
       thumbnail: string;
       duration: number;
       channel: {
@@ -109,6 +108,14 @@ export const getChannelInfoService = async (
 export const getFeaturedContentService = async (
   channelId: string
 ): Promise<FeaturedPlaylistResult> => {
+  // get the cached data first
+  let cachedFeaturedData: FeaturedPlaylistResult | null = await getCached(
+    `channel-featured-content:${channelId}`
+  );
+  // check if the cached data exists or not, if then return cached data otherwise let the DB do the work
+  if (cachedFeaturedData) {
+    return cachedFeaturedData;
+  }
   // get the channel Id and convert it into Object Id
   const channelObjectId = new Types.ObjectId(channelId);
   // find the channel
@@ -160,7 +167,7 @@ export const getFeaturedContentService = async (
             // stage 6 - add channel name to every video
             $addFields: {
               channel: {
-                id: channel._id,
+                _id: channel._id,
                 name: channel.name,
               },
             },
@@ -181,7 +188,7 @@ export const getFeaturedContentService = async (
               duration: 1,
               views: 1,
               channel: 1,
-              cretaedAt: 1,
+              createdAt: 1,
             },
           },
         ],
@@ -196,10 +203,18 @@ export const getFeaturedContentService = async (
       },
     },
   ]);
+
+  // store the new data in variable for caching, if cache miss
+  cachedFeaturedData = { featuredPlaylist };
+  // if cache miss then set the new content to redis
+  await setCached(
+    `channel-featured-content:${channelId}`,
+    cachedFeaturedData,
+    300
+  );
+
   // return featured playlist
-  return {
-    featuredPlaylist,
-  };
+  return cachedFeaturedData;
 };
 
 // Get all the videos Service
@@ -348,6 +363,10 @@ export const updateChannelInfoService = async (
   }
   // save updated info in DB
   await channel.save({ validateBeforeSave: false });
+
+  // after saving the new info to the DB, invalidate the cache
+  await invalidateCache(`channel-profile:${channelId}`);
+
   // return updated fields
   return { name: channel.name, handle: channel.handle, bio: channel.bio };
 };
@@ -372,6 +391,10 @@ export const updateAvatarService = async (
   if (channel?.owner.toString() !== userId) {
     throw new ApiError(403, "Not allowed to update this channel");
   }
+
+  // get the old avatar for deletion
+  const oldAvatar = channel?.avatar?.publicId;
+
   // upload new avatar
   const uploadedAvatar = await uploadToCloudinary(filepath);
   // check if the avatar file uploaded or not
@@ -382,10 +405,7 @@ export const updateAvatarService = async (
   ) {
     throw new ApiError(500, "Avatar uploaded failed");
   }
-  // if uploading successfull delete the old avatar file
-  if (channel.avatar.publicId) {
-    await deleteFromCloudinary(channel.avatar.publicId);
-  }
+
   // update the channel avatar and user avatar and save them to DB
   const newAvatar = {
     url: uploadedAvatar.secure_url,
@@ -400,6 +420,15 @@ export const updateAvatarService = async (
     channel.save({ validateBeforeSave: false }),
     user.save({ validateBeforeSave: false }),
   ]);
+
+  // after saving the new avatar in Db, invalidate the cached data
+  await invalidateCache(`channel-profile:${channelId}`);
+
+  // if uploading successfull, delete the old avatar file
+  if (oldAvatar) {
+    await deleteFromCloudinary(oldAvatar);
+  }
+
   // return the updated avatar
   return { url: newAvatar.url, publicId: newAvatar.publicId };
 };
@@ -441,6 +470,10 @@ export const updateCoverImageService = async (
     publicId: uploadCoverImage.public_id,
   };
   await channel.save({ validateBeforeSave: false });
+
+  // after updating the new cover image in DB, invalidate the data
+  await invalidateCache(`channel-profile:${channelId}`);
+
   // after saving, delete the old cover image
   if (oldCoverImage) {
     await deleteFromCloudinary(oldCoverImage);

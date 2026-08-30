@@ -4,6 +4,7 @@ import { Channel } from "../models/channel.model";
 import { PlaylistVideo } from "../models/playlistVideo.model";
 import { ApiError } from "../utils/apiError";
 import { ChannelState } from "../constants";
+import { invalidateCache } from "./redis.service";
 
 interface UpdatePlaylistPayload {
   title: string;
@@ -125,7 +126,7 @@ export const addVideoService = async (
       throw new ApiError(404, "Channel Not Found");
     }
     // get the playlist and update the video counter
-    const playlist = await Playlist.findByIdAndUpdate(
+    const playlist = await Playlist.findOneAndUpdate(
       { _id: playlistId, channel: channel._id },
       { $inc: { videoCount: 1 } },
       { new: true }
@@ -142,6 +143,10 @@ export const addVideoService = async (
       video: videoId,
       position,
     });
+
+    // invalidate the cache when new video added for featured content in channel
+    await invalidateCache(`channel-featured-content:${channel._id}`);
+
     // return the playlist video
     return addPlaylistVideo;
   } catch (error: any) {
