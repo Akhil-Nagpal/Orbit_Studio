@@ -9,12 +9,13 @@ import { Like } from "../models/like.model";
 import { Comment } from "../models/comment.model";
 import { generateThumbnails } from "../utils/generateThumbnails";
 import { VideoState } from "../constants";
+import { getCached, invalidateCache, setCached } from "./redis.service";
 
 interface ChannelProfile {
   _id: string;
   name: string;
   avatar: string;
-  subscribersCount: number;
+  subscriberCount: number;
 }
 
 interface UploadVideoPayload {
@@ -104,37 +105,31 @@ export const getSingleVideoService = async (
   videoId: string,
   viewerId?: string
 ): Promise<VideoResult> => {
-  // find the video which is ready and visible and populate channel with it
-  const video = await Video.findOne({
-    _id: new Types.ObjectId(videoId),
-    visibility: VideoVisibility.PUBLIC,
-    status: VideoState.READY,
-  })
-    .select(
-      "videoFile title description thumbnail duration tags views likesCount commentsCount channel"
-    )
-    .populate<{ channel: ChannelProfile }>({
-      path: "channel",
-      select: "name avatar subscribersCount",
-    });
-  // check if the video exists or not
-  if (!video) {
-    throw new ApiError(404, "Video Not Found!");
-  }
-  // check if the viewer subscribed to this channel or not
-  let isSubscribed = false;
+  // get the video from cache first
+  let videoData: VideoResult["video"] | null = await getCached(
+    `video-details:${videoId}`
+  );
 
-  if (viewerId) {
-    const subscriptionExists = !!(await Subscription.exists({
-      channel: video.channel._id,
-      subscriber: viewerId,
-    }));
+  if (!videoData) {
+    // find the video which is ready and visible and populate channel with it
+    const video = await Video.findOne({
+      _id: new Types.ObjectId(videoId),
+      visibility: VideoVisibility.PUBLIC,
+      status: VideoState.READY,
+    })
+      .select(
+        "videoFile title description thumbnail duration tags views likesCount commentsCount channel"
+      )
+      .populate<{ channel: ChannelProfile }>({
+        path: "channel",
+        select: "name avatar subscriberCount",
+      });
+    // check if the video exists or not
+    if (!video) {
+      throw new ApiError(404, "Video Not Found!");
+    }
 
-    isSubscribed = subscriptionExists;
-  }
-
-  return {
-    video: {
+    videoData = {
       id: video._id.toString(),
       title: video.title,
       description: video.description,
@@ -151,9 +146,28 @@ export const getSingleVideoService = async (
         _id: video.channel._id.toString(),
         name: video.channel.name,
         avatar: video.channel.avatar,
-        subscribersCount: video.channel.subscribersCount,
+        subscriberCount: video.channel.subscriberCount,
       },
-    },
+    };
+
+    // set the new data to the cache
+    await setCached(`video-details:${videoId}`, videoData, 300);
+  }
+
+  // check if the viewer subscribed to this channel or not
+  let isSubscribed = false;
+
+  if (viewerId) {
+    const subscriptionExists = !!(await Subscription.exists({
+      channel: videoData.channel._id,
+      subscriber: viewerId,
+    }));
+
+    isSubscribed = subscriptionExists;
+  }
+
+  return {
+    video: videoData,
     isSubscribed,
   };
 };
@@ -257,6 +271,10 @@ export const updateMetadataService = async (
   video.visibility = visibility as VideoVisibility;
 
   await video.save({ validateBeforeSave: false });
+
+  // after updating metadata, invalidate Single video
+  await invalidateCache(`video-details:${videoId}`);
+
   // return the updated video
   return video;
 };
@@ -399,7 +417,7 @@ export const postCommentService = async (
   content: string
 ) => {
   // ge the video
-  const video = await Video.findById({ video: videoId }).select("_id");
+  const video = await Video.findById(videoId).select("_id");
 
   // check if the video exists or not
   if (!video) {
@@ -414,6 +432,10 @@ export const postCommentService = async (
   });
   // update the comment count in video
   await Video.findByIdAndUpdate(videoId, { $inc: { commentsCount: 1 } });
+
+  // after adding comment, invalidate single video cache
+  await invalidateCache(`video-details:${videoId}`);
+
   // return the updated response
   return postComment;
 };
@@ -462,6 +484,10 @@ export const deleteCommentService = async (
     { _id: comment.video, commentsCount: { $gt: 0 } },
     { $inc: { commentsCount: -1 } }
   );
+
+  // after deleting the comment, invalidate single video cache
+  await invalidateCache(`video-details:${comment.video.toString()}`);
+
   // return the reponse
   return true;
 };
