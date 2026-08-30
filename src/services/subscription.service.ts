@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 import { Subscription } from "../models/subscription.model";
 import { ApiError } from "../utils/apiError";
 import { Channel } from "../models/channel.model";
+import { invalidateCache } from "./redis.service";
 
 // Subscribe Service
 export const subscribeService = async (
@@ -36,6 +37,9 @@ export const subscribeService = async (
         },
       }
     );
+
+    // after subscribing, invalidate channel cache
+    await invalidateCache(`channel-profile:${channelId}`);
   } catch (error: any) {
     // Check if the user already subscribed to channel or not
     // NOTE: 11000 error code is MongoDB duplication key error code
@@ -72,6 +76,9 @@ export const unsubscribeService = async (
         },
       }
     );
+
+    // after unsubscribing, invalidate channel cache
+    await invalidateCache(`channel-profile:${channelId}`);
   } catch (error) {
     throw error;
   }
