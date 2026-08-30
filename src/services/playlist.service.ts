@@ -45,6 +45,7 @@ export const getSinglePlaylistService = async (
 
   // get every playlistVideo
   const [playlistVideos, totalPlaylistVideos]: [any[], number] = // [any[], number] is used to give type safety to totalPlaylistVideos cause it was showing undefined. NOTE: this solution is given by chatgpt and I don't know what the fuck is this "YET".
+    // Note: Alright I do know now, this [any[], number] type saafety is for heterogenous array destructring, it mean thsi array contains multiple values which have multiple data types like (strings, objects, numbers, arrays, functions)
     await Promise.all([
       PlaylistVideo.find({ playlist: playlistId })
         .sort({ position: 1 })
@@ -189,7 +190,7 @@ export const deleteVideoService = async (
   // Delete the video from playlist
   await PlaylistVideo.deleteOne({
     playlist: playlistId,
-    videoId,
+    video: videoId,
   });
   // decrement video count from playlist
   await Playlist.findByIdAndUpdate(playlistId, { $inc: { videoCount: -1 } });
@@ -223,12 +224,18 @@ export const updatePlaylistService = async (
     throw new ApiError(404, "Playlist Not Found");
   }
   // update the feilds
-  playlist.title = title;
-  playlist.description = description;
-  playlist.visibility = visibility;
+  if (title !== undefined) {
+    playlist.title = title;
+  }
+  if (description !== undefined) {
+    playlist.description = description;
+  }
+  if (visibility !== undefined) {
+    playlist.visibility = visibility;
+  }
 
   // save the playlist after updation
-  await playlist.save();
+  await playlist.save({ validateBeforeSave: false });
 
   // return the updated playlist
   return playlist;
