@@ -3,6 +3,7 @@ import { User } from "../models/user.model";
 import { ApiError } from "../utils/apiError";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
+import logger from "../utils/logger";
 
 // Register User Types
 interface RegisterUserPayload {
@@ -93,7 +94,10 @@ export const registerUserService = async ({
     // if something goes wrong abort the transaction then end the session
     await session.abortTransaction();
     session.endSession();
-    throw error;
+
+    if (error instanceof ApiError) throw error;
+    logger.error("registerUserService failed:", error);
+    throw new ApiError(500, "Registration failed due to a server error");
   }
 };
 
@@ -138,7 +142,9 @@ export const loginUserService = async ({
 
     return { user: safeUser, accessToken, refreshToken };
   } catch (error) {
-    throw error;
+    if (error instanceof ApiError) throw error;
+    logger.error("loginUserService failed:", error);
+    throw new ApiError(500, "Login failed due to a server error");
   }
 };
 
@@ -163,7 +169,9 @@ export const logoutUserService = async (userId: string) => {
 
     return true;
   } catch (error) {
-    throw error;
+    if (error instanceof ApiError) throw error;
+    logger.error("logoutUserService failed:", error);
+    throw new ApiError(500, "Logout failed due to a server error");
   }
 };
 
@@ -176,7 +184,9 @@ export const logoutUserService = async (userId: string) => {
 // 6. after checking generate the new Access & refresh tokens
 // 7. update refresh toke with the new one
 // 8. return both tokens to the controller
-export const tokenRotationService = async (incomingRefreshToken: string) => {
+export const tokenRotationService = async ({
+  incomingRefreshToken,
+}: RefreshTokenPayload) => {
   try {
     // Verify the incoming token with existing one
     const verifyToken = jwt.verify(
@@ -187,8 +197,12 @@ export const tokenRotationService = async (incomingRefreshToken: string) => {
     // Get the user from DB
     const user = await User.findById(verifyToken._id);
 
+    if (!user) {
+      throw new ApiError(401, "Invalid refresh token!");
+    }
+
     // check if the incoming refresh token is same as saved in DB
-    if (incomingRefreshToken !== user?.refreshToken) {
+    if (incomingRefreshToken !== user.refreshToken) {
       throw new ApiError(401, "Refresh Token is reused or expired");
     }
 
@@ -207,6 +221,8 @@ export const tokenRotationService = async (incomingRefreshToken: string) => {
     // returning token to controller
     return { accessToken: newAccessToken, refreshToken: newRefreshToken };
   } catch (error) {
-    throw error;
+    if (error instanceof ApiError) throw error;
+    logger.error("tokenRotationService failed:", error);
+    throw new ApiError(401, "Invalid or expired refresh token");
   }
 };
