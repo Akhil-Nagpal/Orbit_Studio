@@ -10,6 +10,23 @@ import { ApiResponse } from "../utils/apiResponse";
 import { asyncHandler } from "../utils/asyncHandler";
 import type { Request, Response } from "express";
 
+// Adding Access and Refresh Toekn options
+const isProduction = Bun.env.NODE_ENV === "production";
+
+const accessTokenCookieOptions = {
+  httpOnly: true,
+  sameSite: "strict" as const,
+  secure: isProduction,
+  maxAge: Number(Bun.env.ACCESS_TOKEN_MAX_AGE),
+};
+
+const refreshTokenCookieOptions = {
+  httpOnly: true,
+  samSite: "strict" as const,
+  secure: isProduction,
+  maxAge: Number(Bun.env.REFRESH_TOKEN_MAX_AGE),
+};
+
 // Register User controller
 // ------------------------------
 export const registerUser = asyncHandler(
@@ -44,14 +61,6 @@ export const loginUser = asyncHandler(async (req: Request, res: Response) => {
   // get data from user in req.body
   const { identifier, password } = req.body;
 
-  // check if all the feilds are available or not
-  // if (!identifier || !password) {
-  //   throw new ApiError(404, "All feilds are required");
-  // }
-  // Note: Zod validation is applied here, so no need for if else check
-
-  // Call the login service
-  // what this does the controller sends the payload to serrvice then service do some checks and query to database then gets the data and then give that back to controller. So the controller sends the repsonse of the request that user asked
   const { user, accessToken, refreshToken } = await loginUserService({
     identifier,
     password,
@@ -59,18 +68,8 @@ export const loginUser = asyncHandler(async (req: Request, res: Response) => {
   // give the response including cookies
   res
     .status(200)
-    .cookie("accessToken", accessToken, {
-      httpOnly: true,
-      sameSite: "strict",
-      secure: false,
-      maxAge: Number(Bun.env.ACCESS_TOKEN_MAX_AGE),
-    })
-    .cookie("refreshToken", refreshToken, {
-      httpOnly: true,
-      secure: false,
-      sameSite: "strict",
-      maxAge: Number(Bun.env.REFRESH_TOKEN_MAX_AGE),
-    })
+    .cookie("accessToken", accessToken, accessTokenCookieOptions)
+    .cookie("refreshToken", refreshToken, refreshTokenCookieOptions)
     .json(new ApiResponse(200, "Login successful", user));
 });
 
@@ -93,17 +92,9 @@ export const logoutUser = asyncHandler(async (req: Request, res: Response) => {
   // clear cookies
   res
     // cleared Access Token
-    .clearCookie("accessToken", {
-      httpOnly: true,
-      sameSite: "strict",
-      secure: true,
-    })
+    .clearCookie("accessToken", accessTokenCookieOptions)
     // cleared Refresh Token
-    .clearCookie("refreshToken", {
-      httpOnly: true,
-      sameSite: "strict",
-      secure: true,
-    })
+    .clearCookie("refreshToken", refreshTokenCookieOptions)
     .status(201)
     .json(new ApiResponse(200, "Logged Out Successfully", null)); // why null as 3rd argument because there is no data to send in response
 });
@@ -123,24 +114,15 @@ export const tokenRotation = asyncHandler(
     }
 
     // Call the Service
-    const { accessToken, refreshToken } =
-      await tokenRotationService(incomingRefreshToken);
+    const { accessToken, refreshToken } = await tokenRotationService({
+      incomingRefreshToken,
+    });
 
     // response
     res
-      .status(201)
-      .cookie("accessToken", accessToken, {
-        httpOnly: true,
-        sameSite: true,
-        secure: true,
-        maxAge: Number(Bun.env.ACCESS_TOKEN_MAX_AGE),
-      })
-      .cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        sameSite: true,
-        secure: true,
-        maxAge: Number(Bun.env.REFRESH_TOKEN_MAX_AGE),
-      })
+      .status(200)
+      .cookie("accessToken", accessToken, accessTokenCookieOptions)
+      .cookie("refreshToken", refreshToken, refreshTokenCookieOptions)
       .json(
         new ApiResponse(
           201,
