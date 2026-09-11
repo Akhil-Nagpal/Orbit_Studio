@@ -10,7 +10,7 @@ import { ApiResponse } from "../utils/apiResponse";
 import { asyncHandler } from "../utils/asyncHandler";
 import type { Request, Response } from "express";
 
-// Adding Access and Refresh Toekn options
+// Adding Access and Refresh Token options
 const isProduction = Bun.env.NODE_ENV === "production";
 
 const accessTokenCookieOptions = {
@@ -36,7 +36,7 @@ export const registerUser = asyncHandler(
 
     // check if all the fields are available or not
     // if (!username || !fullName || !email || !password) {
-    //   throw new ApiError(400, "All feilds are required!");
+    //   throw new ApiError(400, "All fields are required!");
     // }
     // Note: Zod validation is applied here, so no need for if else check
 
@@ -78,9 +78,9 @@ export const loginUser = asyncHandler(async (req: Request, res: Response) => {
 // 2. Add logoutUser method to controller (Controller) - it's a HTTP request logic only
 // - get the user through req cause user is now called from req
 // - call the service with user id
-// remove the cokkies
+// remove the cookies
 export const logoutUser = asyncHandler(async (req: Request, res: Response) => {
-  // check if user id exists or not - This step is neccessarily cause typscript thinks userId is possibily undefined
+  // check if user id exists or not - This step is necessarily cause typescript thinks userId is possibility undefined
   if (!req.user) {
     throw new ApiError(401, "User not authorized");
   }

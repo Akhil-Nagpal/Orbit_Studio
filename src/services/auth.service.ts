@@ -31,7 +31,7 @@ export const registerUserService = async ({
   email,
   password,
 }: RegisterUserPayload) => {
-  // This requires transaction cause if the either user creation or channel creation or both fails even the checks this whole process must rollback - that mena if one fails to exist then both can't exists
+  // This requires transaction cause if the either user creation or channel creation or both fails even the checks this whole process must rollback - that means if one fails to exist then both can't exists
   // Added session of mongoose
   const session = await mongoose.startSession();
 
@@ -48,7 +48,7 @@ export const registerUserService = async ({
     }
 
     // if the user does not exists then create a new one
-    const user = await new User({
+    const user = new User({
       username,
       fullName,
       email,
@@ -60,7 +60,7 @@ export const registerUserService = async ({
     await user.save({ session });
 
     // create channel after creating the user
-    const channel = await new Channel({
+    const channel = new Channel({
       owner: user._id,
       name: fullName,
       handle: username,
@@ -76,7 +76,7 @@ export const registerUserService = async ({
     //   throw new ApiError(500, "Channel creation failed");
     // }
 
-    // update the channel feild in user
+    // update the channel field in user
     user.channel = channel._id;
     await user.save({ session, validateBeforeSave: false });
 
@@ -90,12 +90,15 @@ export const registerUserService = async ({
     );
 
     return safeUser;
-  } catch (error) {
+  } catch (error: any) {
     // if something goes wrong abort the transaction then end the session
     await session.abortTransaction();
     session.endSession();
 
     if (error instanceof ApiError) throw error;
+    if (error.code === 11000) {
+      throw new ApiError(409, "User already exists");
+    }
     logger.error("registerUserService failed:", error);
     throw new ApiError(500, "Registration failed due to a server error");
   }
@@ -127,15 +130,15 @@ export const loginUserService = async ({
       throw new ApiError(401, "Wrong Password!");
     }
     // generate access Token & refresh Token
-    // NOTE: Token generation are always syncronous
+    // NOTE: Token generation are always synchronous
     const accessToken = existingUser.generateAccessToken();
     const refreshToken = existingUser.generateRefreshToken();
 
-    // update the refresh Token feild with newly generated one
+    // update the refresh Token field with newly generated one
     existingUser.refreshToken = refreshToken;
     await existingUser.save({ validateBeforeSave: false });
 
-    // remove password and refresh token feilds for security
+    // remove password and refresh token fields for security
     const safeUser = await User.findById(existingUser._id).select(
       "-password -refreshToken"
     );
@@ -175,9 +178,9 @@ export const logoutUserService = async (userId: string) => {
   }
 };
 
-// Refresh Token Rotaion - What goes inside service
+// Refresh Token Rotation - What goes inside service
 // 1. get incoming refresh token from controller
-// 2. verify if the incoming rfresh token is same as token saved in DB
+// 2. verify if the incoming refresh token is same as token saved in DB
 // 3. after verify get the user from DB
 // 4. check if the refresh token is used or expired
 // 5. if the token is reused or expired then remove the refresh token from DB this makes user logout forcefully
@@ -205,10 +208,6 @@ export const tokenRotationService = async ({
     if (incomingRefreshToken !== user.refreshToken) {
       throw new ApiError(401, "Refresh Token is reused or expired");
     }
-
-    // if refresh token is tampered then make user logout
-    user.refreshToken = undefined;
-    await user.save({ validateBeforeSave: false });
 
     // Generate new tokens
     const newAccessToken = user.generateAccessToken();
