@@ -1,9 +1,8 @@
-import { Channel } from "../models/channel.model";
-import { User } from "../models/user.model";
 import { ApiError } from "../utils/apiError";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import logger from "../utils/logger";
+import { authRepository } from "../repositories/auth.repository";
 
 // Register User Types
 interface RegisterUserPayload {
@@ -38,56 +37,43 @@ export const registerUserService = async ({
   try {
     // Added transaction
     session.startTransaction();
+
     // check if the user exists or not
-    const existingUser = await User.findOne({
-      $or: [{ email }, { username }],
-    }).session(session);
+    const existingUser = await authRepository.findByEmailOrUsername(
+      email,
+      username,
+      session
+    );
 
     if (existingUser) {
       throw new ApiError(409, "User already exists");
     }
 
     // if the user does not exists then create a new one
-    const user = new User({
-      username,
-      fullName,
-      email,
-      password,
-      subscribers: 0,
-    });
 
-    // Saved user in session now cause needed user _id
-    await user.save({ session });
+    const user = await authRepository.createUser(
+      { username, fullName, email, password },
+      session
+    );
 
     // create channel after creating the user
-    const channel = new Channel({
-      owner: user._id,
-      name: fullName,
-      handle: username,
-    });
+    const channel = await authRepository.createChannel(
+      {
+        owner: user._id,
+        name: fullName,
+        handle: username,
+      },
+      session
+    );
 
-    // same as user
-    await channel.save({ session });
-
-    // throw error if user registered but channel is not created successfully
-    // NOTE: delete the user if channel is not created cause if user is created so channel must be created as well if channel creation failed then delete that user as well cause we don't want to save any user without channel
-    // if (!channel) {
-    //   await User.findByIdAndDelete(user._id);
-    //   throw new ApiError(500, "Channel creation failed");
-    // }
-
-    // update the channel field in user
-    user.channel = channel._id;
-    await user.save({ session, validateBeforeSave: false });
+    await authRepository.setChannelRef(user, channel._id, session);
 
     // after saving the user with all the updated credential now commit the transaction and end the session
     await session.commitTransaction();
     session.endSession();
 
     // Return the user with out password and tokens
-    const safeUser = await User.findById(user._id).select(
-      "-password -refreshToken"
-    );
+    const safeUser = await authRepository.findSafeUser(user._id.toString());
 
     return safeUser;
   } catch (error: any) {
@@ -116,8 +102,12 @@ export const loginUserService = async ({
     const isEmail = identifier.includes("@");
 
     // check if the user exists or not
-    const existingUser = await User.findOne(
-      isEmail ? { email: identifier } : { username: identifier }
+    // const existingUser = await User.findOne(
+    //   isEmail ? { email: identifier } : { username: identifier }
+    // );
+    const existingUser = await authRepository.findByIdentifier(
+      identifier,
+      isEmail
     );
 
     if (!existingUser) {
@@ -134,13 +124,14 @@ export const loginUserService = async ({
     const accessToken = existingUser.generateAccessToken();
     const refreshToken = existingUser.generateRefreshToken();
 
-    // update the refresh Token field with newly generated one
-    existingUser.refreshToken = refreshToken;
-    await existingUser.save({ validateBeforeSave: false });
+    // // update the refresh Token field with newly generated one
+    // existingUser.refreshToken = refreshToken;
+    // await existingUser.save({ validateBeforeSave: false });
+    await authRepository.setRefreshToken(existingUser, refreshToken);
 
     // remove password and refresh token fields for security
-    const safeUser = await User.findById(existingUser._id).select(
-      "-password -refreshToken"
+    const safeUser = await authRepository.findSafeUser(
+      existingUser._id.toString()
     );
 
     return { user: safeUser, accessToken, refreshToken };
@@ -160,15 +151,14 @@ export const loginUserService = async ({
 export const logoutUserService = async (userId: string) => {
   try {
     // Get user by id
-    const user = await User.findById(userId);
+    const user = await authRepository.findById(userId);
     // check if user exists or not
     if (!user) {
       throw new ApiError(404, "User not found");
     }
 
     // remove refresh token from user
-    user.refreshToken = undefined;
-    await user.save({ validateBeforeSave: false });
+    await authRepository.setRefreshToken(user, undefined);
 
     return true;
   } catch (error) {
@@ -198,7 +188,7 @@ export const tokenRotationService = async ({
     ) as { _id: string };
 
     // Get the user from DB
-    const user = await User.findById(verifyToken._id);
+    const user = await authRepository.findById(verifyToken._id);
 
     if (!user) {
       throw new ApiError(401, "Invalid refresh token!");
@@ -214,8 +204,7 @@ export const tokenRotationService = async ({
     const newRefreshToken = user.generateRefreshToken();
 
     // update refresh token with new one
-    user.refreshToken = newRefreshToken;
-    await user.save({ validateBeforeSave: false });
+    await authRepository.setRefreshToken(user, newRefreshToken);
 
     // returning token to controller
     return { accessToken: newAccessToken, refreshToken: newRefreshToken };
