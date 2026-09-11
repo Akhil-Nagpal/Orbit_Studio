@@ -19,14 +19,14 @@ export const getCurrentUser = asyncHandler(
     if (!req.user) {
       throw new ApiError(401, "Unauthorized user");
     }
-    // get tyhe user from req user
+    // get the user from req user
     const userId = req.user?._id;
     // Call the service to get the user
     const user = await getCurrentUserService(userId.toString());
     // return the response
     res
       .status(201)
-      .json(new ApiResponse(201, "User Feteched Successfully", user));
+      .json(new ApiResponse(201, "User Fetched Successfully", user));
   }
 );
 
@@ -40,11 +40,11 @@ export const updateUser = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user?._id;
   // Get all the data from user
   const { fullName, username, bio } = req.body;
-  // Cherck if all the feilds are avaiable or not
+  // Check if all the fields are available or not
   if (!fullName && !username && !bio) {
     throw new ApiError(400, "One field is must");
   }
-  // Call the service with user ID + all the feilds
+  // Call the service with user ID + all the fields
   const updatedUser = await updateUserService(userId?.toString(), {
     fullName,
     username,
@@ -129,7 +129,7 @@ export const getWatchHistory = asyncHandler(
     const userId = req.user?._id;
     // check if the user exists or not
     if (!userId) {
-      throw new ApiError(400, "Unauthrorized Request");
+      throw new ApiError(400, "Unauthorized Request");
     }
     // get the page and limit params
     const { page, limit } = req.query;
@@ -139,7 +139,7 @@ export const getWatchHistory = asyncHandler(
       Number(page),
       Number(limit)
     );
-    // give back the reposne to the
+    // give back the response to the
     res
       .status(200)
       .json(
