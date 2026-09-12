@@ -24,5 +24,5 @@ export enum VideoState {
 export enum PlaylistState {
   ACTIVE = "ACTIVE",
   SUSPENDED = "SUSPENDED",
-  DELETED = " DELETED",
+  DELETED = "DELETED",
 }

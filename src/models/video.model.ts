@@ -13,7 +13,7 @@ interface CloudinaryFiles {
   publicId?: string;
 }
 
-// interface must extends Document only when we need mongoose inbuild methods otherwise, No need of that
+// interface must extends Document only when we need mongoose inbuilt methods otherwise, No need of that
 export interface IVideo {
   videoFile: CloudinaryFiles;
   title: string;
@@ -45,7 +45,7 @@ const videoSchema = new mongoose.Schema<IVideo>(
     },
     title: {
       type: String,
-      minlenght: 5,
+      minlength: 5,
       maxlength: 250,
     },
     description: {
