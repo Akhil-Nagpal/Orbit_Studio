@@ -1,14 +1,15 @@
 import mongoose from "mongoose";
-import { Playlist } from "../models/playlist.model";
+import { Playlist, PlaylistVisibility } from "../models/playlist.model";
 import { Channel } from "../models/channel.model";
 import { PlaylistVideo } from "../models/playlistVideo.model";
 import { ApiError } from "../utils/apiError";
 import { ChannelState } from "../constants";
 import { invalidateCache } from "./redis.service";
+import { playlistRepository } from "../repositories/playlist.repository";
 
 interface UpdatePlaylistPayload {
   title: string;
-  visibility: string;
+  visibility: PlaylistVisibility;
   description?: string;
 }
 
@@ -18,8 +19,8 @@ export const getSinglePlaylistService = async (
   limit: number,
   userId?: string
 ) => {
-  // get the palylist
-  const playlist = await Playlist.findById(playlistId);
+  // get the playlist
+  const playlist = await playlistRepository.findById(playlistId);
   if (!playlist) {
     throw new ApiError(404, "Playlist Not Found");
   }
@@ -27,10 +28,8 @@ export const getSinglePlaylistService = async (
   let isOwner = false;
 
   if (userId) {
-    const channel = await Channel.findOne({
-      owner: userId,
-      status: ChannelState.ACTIVE,
-    });
+    // find active channel
+    const channel = await playlistRepository.findChannelByOwner(userId);
 
     isOwner =
       !!channel && playlist.channel.toString() === channel._id.toString();
@@ -45,18 +44,10 @@ export const getSinglePlaylistService = async (
 
   // get every playlistVideo
   const [playlistVideos, totalPlaylistVideos]: [any[], number] = // [any[], number] is used to give type safety to totalPlaylistVideos cause it was showing undefined. NOTE: this solution is given by chatgpt and I don't know what the fuck is this "YET".
-    // Note: Alright I do know now, this [any[], number] type saafety is for heterogenous array destructring, it mean thsi array contains multiple values which have multiple data types like (strings, objects, numbers, arrays, functions)
-    await Promise.all([
-      PlaylistVideo.find({ playlist: playlistId })
-        .sort({ position: 1 })
-        .skip(skip)
-        .limit(limit)
-        .populate("video"),
+    // Note: Alright I do know now, this [any[], number] type safety is for heterogenous array de-structuring, it means this array contains multiple values which have multiple data types like (strings, objects, numbers, arrays, functions)
+    await playlistRepository.findPlaylistVideo(playlistId, skip, limit);
 
-      PlaylistVideo.countDocuments({ playlist: playlistId }),
-    ]);
-
-  // calculate totalvideos and total pages
+  // calculate total videos and total pages
   const totalPages = Math.ceil(totalPlaylistVideos / limit);
   // return the response
   return {
@@ -73,8 +64,8 @@ export const getSinglePlaylistService = async (
       limit,
       totalPlaylistVideos,
       totalPages,
-      currentpage: page,
-      hasNextpage: page < totalPages,
+      currentPage: page,
+      hasNextPage: page < totalPages,
     },
     isOwner,
   };
@@ -86,20 +77,17 @@ export const createPlaylistService = async (
   userId: string,
   title: string,
   description: string | undefined,
-  visibility: string
+  visibility: PlaylistVisibility
 ) => {
-  // find the channel
-  const channel = await Channel.findOne({
-    owner: userId,
-    status: ChannelState.ACTIVE,
-  });
+  // find the active channel by owner
+  const channel = await playlistRepository.findChannelByOwner(userId);
 
   // check if the channel exists or not
   if (!channel) {
     throw new ApiError(404, "Channel not Found");
   }
   // create the playlist
-  const playlistCreated = await Playlist.create({
+  const playlistCreated = await playlistRepository.createPlaylist({
     channel: channel._id,
     title,
     description,
@@ -122,28 +110,24 @@ export const addVideoService = async (
 ) => {
   try {
     // get the channel
-    const channel = await Channel.findOne({
-      owner: userId,
-      status: ChannelState.ACTIVE,
-    });
-    // check if the channel exusts or not
+    const channel = await playlistRepository.findChannelByOwner(userId);
+    // check if the channel exists or not
     if (!channel) {
       throw new ApiError(404, "Channel Not Found");
     }
     // get the playlist and update the video counter
-    const playlist = await Playlist.findOneAndUpdate(
-      { _id: playlistId, channel: channel._id },
-      { $inc: { videoCount: 1 } },
-      { new: true }
+    const playlist = await playlistRepository.incrementVideoCount(
+      playlistId,
+      channel._id
     );
     // check if the playlist exists or not
     if (!playlist) {
       throw new ApiError(404, "Playlist Not Found!");
     }
-    // calculate the positon of video
+    // calculate the position of video
     const position = playlist.videoCount;
     // create the playlist video
-    const addPlaylistVideo = await PlaylistVideo.create({
+    const addPlaylistVideo = await playlistRepository.createPlaylistVideo({
       playlist: playlistId,
       video: videoId,
       position,
@@ -157,9 +141,7 @@ export const addVideoService = async (
   } catch (error: any) {
     // check if the video is already there then update the video count and throw error
     if (error.code === 11000) {
-      await Playlist.findByIdAndUpdate(playlistId, {
-        $inc: { videoCount: -1 },
-      });
+      await playlistRepository.decrementVideoCount(playlistId);
       throw new ApiError(400, "Video already exists in playlist");
     }
     throw error;
@@ -174,31 +156,25 @@ export const deleteVideoService = async (
   userId: string
 ) => {
   // get the channel
-  const channel = await Channel.findOne({
-    owner: userId,
-    status: ChannelState.ACTIVE,
-  });
+  const channel = await playlistRepository.findChannelByOwner(userId);
   // check if the channel exists or not
   if (!channel) {
-    throw new ApiError(404, "Chnnel Not Found");
+    throw new ApiError(404, "Channel Not Found");
   }
   // find the playlist and check ownership
-  const playlist = await Playlist.findOne({
-    _id: playlistId,
-    channel: channel._id,
-  });
+  const playlist = await playlistRepository.findPlaylistByChannel(
+    playlistId,
+    channel._id
+  );
   // check if the playlist exists or not
   if (!playlist) {
     throw new ApiError(404, "Playlist Not Found!");
   }
   // Delete the video from playlist
-  await PlaylistVideo.deleteOne({
-    playlist: playlistId,
-    video: videoId,
-  });
+  await playlistRepository.deletePlaylistVideo(playlistId, videoId);
 
   // decrement video count from playlist
-  await Playlist.findByIdAndUpdate(playlistId, { $inc: { videoCount: -1 } });
+  await playlistRepository.decrementVideoCount(playlistId);
 
   // after deleting the video, invalidate the cache
   await invalidateCache(`channel-featured-content:${channel._id}`);
@@ -214,10 +190,7 @@ export const updatePlaylistService = async (
   { title, visibility, description }: UpdatePlaylistPayload
 ) => {
   // get the channel
-  const channel = await Channel.findOne({
-    owner: userId,
-    status: ChannelState.ACTIVE,
-  });
+  const channel = await playlistRepository.findChannelByOwner(userId);
   // check if the channel exists or not
   if (!channel) {
     throw new ApiError(404, "Channel Not Found");
@@ -231,7 +204,7 @@ export const updatePlaylistService = async (
   if (!playlist) {
     throw new ApiError(404, "Playlist Not Found");
   }
-  // update the feilds
+  // update the fields
   if (title !== undefined) {
     playlist.title = title;
   }
