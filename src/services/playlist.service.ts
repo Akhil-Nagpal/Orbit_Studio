@@ -196,27 +196,21 @@ export const updatePlaylistService = async (
     throw new ApiError(404, "Channel Not Found");
   }
   // find the playlist by id and check ownership
-  const playlist = await Playlist.findOne({
-    _id: playlistId,
-    channel: channel._id,
-  });
+  const playlist = await playlistRepository.findPlaylistByChannel(
+    playlistId,
+    channel._id
+  );
 
   if (!playlist) {
     throw new ApiError(404, "Playlist Not Found");
   }
-  // update the fields
-  if (title !== undefined) {
-    playlist.title = title;
-  }
-  if (description !== undefined) {
-    playlist.description = description;
-  }
-  if (visibility !== undefined) {
-    playlist.visibility = visibility;
-  }
 
-  // save the playlist after updation
-  await playlist.save({ validateBeforeSave: false });
+  // update the fields
+  await playlistRepository.updatePlaylist(playlist, {
+    title,
+    visibility,
+    description,
+  });
 
   // after updating playlist, invalidate the cache
   await invalidateCache(`channel-featured-content:${channel._id}`);
@@ -237,29 +231,27 @@ export const deletePlaylistService = async (
     // add transaction
     session.startTransaction();
     // get the channel
-    const channel = await Channel.findOne({
-      owner: userId,
-      status: ChannelState.ACTIVE,
-    });
+    const channel = await playlistRepository.findChannelByOwner(userId);
     // check if the channel exists or not
     if (!channel) {
       throw new ApiError(404, "Channel Not Found");
     }
     // find the playlist and check ownership
-    const playlist = await Playlist.findOne({
-      _id: playlistId,
-      channel: channel._id,
-    }).session(session);
+    const playlist = await playlistRepository.findPlaylistWithSession(
+      playlistId,
+      channel._id,
+      session
+    );
     // check if playlist exists or not
     if (!playlist) {
       throw new ApiError(404, "Playlist Not Found");
     }
     // delete all the playlist videos first cause it's a child
     if (playlist) {
-      await PlaylistVideo.deleteMany({ playlist: playlistId }).session(session);
+      await playlistRepository.deleteAllPlaylistVideos(playlistId, session);
     }
     // delete the Playlist
-    await Playlist.deleteOne({ _id: playlistId }).session(session);
+    await playlistRepository.deletePlaylist(playlistId, session);
     // end session and transaction
     await session.commitTransaction();
 

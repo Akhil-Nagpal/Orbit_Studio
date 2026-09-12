@@ -44,6 +44,7 @@ const playlistSchema = new mongoose.Schema(
     },
     visibility: {
       type: String,
+      required: true,
       enum: Object.values(PlaylistVisibility),
       default: PlaylistVisibility.PUBLIC,
     },

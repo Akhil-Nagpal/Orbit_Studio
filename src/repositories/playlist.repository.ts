@@ -33,6 +33,17 @@ export const playlistRepository = {
       PlaylistVideo.countDocuments({ playlist: playlistId }),
     ]),
 
+  // find playlist with session
+  findPlaylistWithSession: (
+    playlistId: string,
+    channelId: mongoose.Types.ObjectId,
+    session: mongoose.ClientSession
+  ) =>
+    Playlist.findOne({
+      _id: playlistId,
+      channel: channelId,
+    }).session(session),
+
   // create playlist
   createPlaylist: (data: {
     channel: mongoose.Types.ObjectId;
@@ -71,4 +82,31 @@ export const playlistRepository = {
       playlist: playlistId,
       video: videoId,
     }),
+
+  // update Playlist
+  updatePlaylist: (
+    playlist: InstanceType<typeof Playlist>,
+    updates: {
+      title: string;
+      description?: string;
+      visibility: PlaylistVisibility;
+    }
+  ) => {
+    playlist.title = updates.title;
+    playlist.visibility = updates.visibility;
+    if (updates.description !== undefined) {
+      playlist.description = updates.description;
+    }
+    return playlist.save({ validateBeforeSave: false });
+  },
+
+  // delete playlist videos
+  deleteAllPlaylistVideos: (
+    playlistId: string,
+    session: mongoose.ClientSession
+  ) => PlaylistVideo.deleteMany({ playlist: playlistId }).session(session),
+
+  // delete playlist itself
+  deletePlaylist: (playlistId: string, session: mongoose.ClientSession) =>
+    Playlist.deleteOne({ _id: playlistId }).session(session),
 };
