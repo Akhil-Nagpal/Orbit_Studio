@@ -11,6 +11,7 @@ import {
   getSinglePlaylistService,
   updatePlaylistService,
 } from "../services/playlist.service";
+import { PlaylistVisibility } from "../models/playlist.model";
 
 // Get single playlist
 export const getSinglePlaylist = asyncHandler(
@@ -50,11 +51,19 @@ export const createPlaylist = asyncHandler(
 
     const { title, description, visibility } = req.body;
 
+    if (!title || typeof title !== "string" || title.trim() === "") {
+      throw new ApiError(400, "Title is required");
+    }
+
+    if (!Object.values(PlaylistVisibility).includes(visibility)) {
+      throw new ApiError(400, "Invalid visibility value");
+    }
+
     const createdPlaylist = await createPlaylistService(
       userId.toString(),
       title,
       description,
-      visibility
+      visibility as PlaylistVisibility
     );
 
     res
