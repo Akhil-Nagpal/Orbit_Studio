@@ -3,6 +3,8 @@ import { Subscription } from "../models/subscription.model";
 import { ApiError } from "../utils/apiError";
 import { Channel } from "../models/channel.model";
 import { invalidateCache } from "./redis.service";
+import { channelRepository } from "../repositories/channel.repository";
+import { subscriptionRepository } from "../repositories/subscription.repository";
 
 // Subscribe Service
 export const subscribeService = async (
@@ -11,7 +13,7 @@ export const subscribeService = async (
   channelId: string
 ): Promise<void> => {
   // get the channel
-  const channel = await Channel.findById(channelId);
+  const channel = await channelRepository.findById(channelId);
 
   // check if the channel exists or not
   if (!channel) {
@@ -23,20 +25,10 @@ export const subscribeService = async (
     throw new ApiError(400, "You cannot subscribe to yourself");
   }
   try {
-    // create subscriber and chennel relationship
-    await Subscription.create({
-      subscriber: new Types.ObjectId(subscriberId),
-      channel: new Types.ObjectId(channelId),
-    });
-    // update subscriber count after subscribtion relationship is successfull
-    await Channel.updateOne(
-      { _id: channelId },
-      {
-        $inc: {
-          subscriberCount: 1,
-        },
-      }
-    );
+    // create subscriber and channel relationship
+    await subscriptionRepository.createSubscription(subscriberId, channelId);
+    // update subscriber count after subscription relationship is successful
+    await subscriptionRepository.adjustSubscriberCount(channelId, 1);
 
     // after subscribing, invalidate channel cache
     await invalidateCache(`channel-profile:${channelId}`);
@@ -57,25 +49,18 @@ export const unsubscribeService = async (
 ): Promise<void> => {
   try {
     // find the user and delete the relationship
-    const result = await Subscription.findOneAndDelete({
-      subscriber: subscriberId,
-      channel: channelId,
-    });
+    const result = await subscriptionRepository.deleteSubscription(
+      subscriberId,
+      channelId
+    );
 
     //   check if the relationship exists or not
     if (!result) {
       throw new ApiError(404, "Subscription Not Found");
     }
 
-    // update subscriber count after Unsubscription realtionship is successfull
-    await Channel.updateOne(
-      { _id: channelId },
-      {
-        $inc: {
-          subscriberCount: -1,
-        },
-      }
-    );
+    // update subscriber count after Un-subscription relationship is successful
+    await subscriptionRepository.adjustSubscriberCount(channelId, -1);
 
     // after unsubscribing, invalidate channel cache
     await invalidateCache(`channel-profile:${channelId}`);
