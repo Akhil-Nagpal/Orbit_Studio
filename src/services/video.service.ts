@@ -1,15 +1,12 @@
 import { Types } from "mongoose";
 import cloudinary from "../config/cloudinary";
 import { Subscription } from "../models/subscription.model";
-import { Video, VideoVisibility, type IVideo } from "../models/video.model";
+import { VideoVisibility } from "../models/video.model";
 import { ApiError } from "../utils/apiError";
 import crypto from "crypto";
-import { View } from "../models/view.model";
-import { Like } from "../models/like.model";
-import { Comment } from "../models/comment.model";
 import { generateThumbnails } from "../utils/generateThumbnails";
-import { VideoState } from "../constants";
 import { getCached, invalidateCache, setCached } from "./redis.service";
+import { videoRepository } from "../repositories/video.repository";
 
 interface ChannelProfile {
   _id: string;
@@ -64,26 +61,10 @@ interface MetadataPayload {
 export const getFeedService = async (page: number, limit: number) => {
   // Calculate offset pagination
   const skip = (page - 1) * limit;
-  // create filter to find the relevant and available videos
-  const filter: { visibility: VideoVisibility; status: VideoState } = {
-    visibility: VideoVisibility.PUBLIC,
-    status: VideoState.READY,
-  };
-  // fetch all videos using promise.all with pagination and latest videos first
-  const [videos, totalVideos] = await Promise.all([
-    Video.find(filter)
-      .sort({ createdAt: -1, _id: -1 })
-      .skip(skip)
-      .limit(limit)
-      .select("title thumbnail duration views createdAt channel")
-      .populate({
-        path: "channel",
-        select: "name avatar",
-      }),
 
-    // Calculate Total Videos
-    Video.countDocuments(filter),
-  ]);
+  // fetch all the videos available on the platform
+  const [videos, totalVideos] = await videoRepository.findFeed(skip, limit);
+
   // Calculate Total Pages for pagination
   const totalPages = Math.ceil(totalVideos / limit);
   // return the videos including pagination
@@ -112,18 +93,7 @@ export const getSingleVideoService = async (
 
   if (!videoData) {
     // find the video which is ready and visible and populate channel with it
-    const video = await Video.findOne({
-      _id: new Types.ObjectId(videoId),
-      visibility: VideoVisibility.PUBLIC,
-      status: VideoState.READY,
-    })
-      .select(
-        "videoFile title description thumbnail duration tags views likesCount commentsCount channel"
-      )
-      .populate<{ channel: ChannelProfile }>({
-        path: "channel",
-        select: "name avatar subscriberCount",
-      });
+    const video = await videoRepository.findVideoWithChannelInfo(videoId);
     // check if the video exists or not
     if (!video) {
       throw new ApiError(404, "Video Not Found!");
@@ -207,7 +177,7 @@ export const uploadVideoService = async (
   if (!payload.videoFile.url || !payload.videoFile.publicId) {
     throw new ApiError(400, "Invalid Video File Payload");
   }
-  // check all the required feilds
+  // check all the required fields
   if (!payload.duration || payload.duration === 0) {
     throw new ApiError(400, "Invalid duration");
   }
@@ -226,7 +196,7 @@ export const uploadVideoService = async (
     throw new ApiError(400, "Invalid thumbnail");
   }
   // create the video record in DB but keep the metadata empty
-  const createVideoRecord = await Video.create({
+  const createVideoRecord = await videoRepository.createVideo({
     channel: channelId,
     videoFile: {
       url: payload.videoFile.url,
@@ -237,7 +207,7 @@ export const uploadVideoService = async (
     description: payload.description || "",
     category: payload.category,
     tags: payload.tags || [],
-    visibility: payload.visibility || "PRIVATE",
+    visibility: payload.visibility || VideoVisibility.PRIVATE,
     views: 0,
     likesCount: 0,
     commentsCount: 0,
@@ -254,23 +224,20 @@ export const updateMetadataService = async (
   { title, description, category, tags, playlist, visibility }: MetadataPayload
 ) => {
   // find the video
-  const video = await Video.findOne({
-    _id: videoId,
-    channel: channelId,
-  });
+  const video = await videoRepository.findVideoByChannel(videoId, channelId);
   // check if video exists or
   if (!video) {
     throw new ApiError(404, "Video Not Found!");
   }
   // update the video metadata and save the video
-  video.title = title;
-  video.description = description;
-  video.category = category;
-  video.tags = tags;
-  video.playlist = new Types.ObjectId(playlist);
-  video.visibility = visibility as VideoVisibility;
-
-  await video.save({ validateBeforeSave: false });
+  await videoRepository.updateVideoMetadata(video, {
+    title,
+    description,
+    category,
+    tags,
+    playlist: new Types.ObjectId(playlist),
+    visibility: visibility as VideoVisibility,
+  });
 
   // after updating metadata, invalidate Single video
   await invalidateCache(`video-details:${videoId}`);
@@ -301,21 +268,17 @@ export const addViewService = async (
     viewerKey = sessionId;
   }
   // check if the viewer already watched the video or not
-  const existingView = await View.findOne({
+  const existingView = await videoRepository.findExistingView(
     viewerKey,
-    video: videoId,
-  });
+    videoId
+  );
 
   const now = new Date();
 
   if (!existingView) {
-    await View.create({
-      viewerKey,
-      video: videoId,
-      lastCountedAt: now,
-    });
-    // after crerating view document icrement the view count in video
-    await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
+    await videoRepository.createView(videoId, viewerKey, now);
+    // after creating view document increment the view count in video
+    await videoRepository.incrementView(videoId);
 
     return { counted: true, newSessionId };
   }
@@ -327,34 +290,24 @@ export const addViewService = async (
   // After that we check if the time difference is greater than 3 hrs count the view on the same video otherwise it won't count the view
 
   if (timeDiff > VIEW_WINDOW) {
-    existingView.lastCountedAt = now;
-    await existingView.save({ validateBeforeSave: false });
-    await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
+    await videoRepository.updateViewTimestamp(existingView, now);
+    await videoRepository.incrementView(videoId);
     return { counted: true, newSessionId };
   }
 
   return { counted: false, newSessionId };
 };
 
-// Liking or unliking video
+// Liking or un-liking video
 export const toggleLikeService = async (userId: string, videoId: string) => {
   // check if the like already exists or not
-  const existingLike = await Like.findOne({
-    user: userId,
-    video: videoId,
-  }).lean();
+  const existingLike = await videoRepository.findLike(userId, videoId);
   // if the video is liked already than delete the like
   if (existingLike) {
-    await Like.deleteOne({
-      _id: existingLike._id,
-    });
+    await videoRepository.deleteLike(existingLike._id.toString());
 
     // and update the video likes count
-    const unlikeVideo = await Video.findByIdAndUpdate(
-      videoId,
-      { $inc: { likesCount: -1 } },
-      { new: true }
-    ).select("likesCount");
+    const unlikeVideo = await videoRepository.adjustLikeCount(videoId, -1);
 
     // return the like status and like count
     return {
@@ -363,13 +316,9 @@ export const toggleLikeService = async (userId: string, videoId: string) => {
     };
   }
   // if video is not liked then add the like
-  await Like.create({ user: userId, video: videoId });
+  await videoRepository.createLike(userId, videoId);
   // Then update the like count in video
-  const likeVideo = await Video.findByIdAndUpdate(
-    videoId,
-    { $inc: { likesCount: 1 } },
-    { new: true }
-  ).select("likesCount");
+  const likeVideo = await videoRepository.adjustLikeCount(videoId, 1);
   // return the like status and like count
   return { liked: true, likesCount: likeVideo?.likesCount };
 };
@@ -383,15 +332,11 @@ export const getCommentsService = async (
   // calculate offset pagination
   const skip = (page - 1) * limit;
   // find all the comments with pagination
-  const [comments, totalComments] = await Promise.all([
-    Comment.find({ video: videoId })
-      .populate("user", "username avatar")
-      .sort({ createdAt: -1, _id: -1 })
-      .skip(skip)
-      .limit(limit),
-
-    Comment.countDocuments({ video: videoId }),
-  ]);
+  const [comments, totalComments] = await videoRepository.findVideoComments(
+    videoId,
+    skip,
+    limit
+  );
 
   // Calculate total pages
   const totalPages = Math.ceil(totalComments / limit);
@@ -416,8 +361,8 @@ export const postCommentService = async (
   videoId: string,
   content: string
 ) => {
-  // ge the video
-  const video = await Video.findById(videoId).select("_id");
+  // get the video
+  const video = await videoRepository.findVideoById(videoId);
 
   // check if the video exists or not
   if (!video) {
@@ -425,13 +370,13 @@ export const postCommentService = async (
   }
 
   // if video exists then create a comment
-  const postComment = await Comment.create({
-    user: userId,
-    video: videoId,
-    content,
-  });
+  const postComment = await videoRepository.createComment(
+    videoId,
+    userId,
+    content
+  );
   // update the comment count in video
-  await Video.findByIdAndUpdate(videoId, { $inc: { commentsCount: 1 } });
+  await videoRepository.incrementCommentCount(videoId);
 
   // after adding comment, invalidate single video cache
   await invalidateCache(`video-details:${videoId}`);
@@ -448,7 +393,7 @@ export const updateCommentService = async (
   content: string
 ) => {
   // find the comment
-  const comment = await Comment.findById(commentId);
+  const comment = await videoRepository.findCommentById(commentId);
   // check if the comment exists or not
   if (!comment) {
     throw new ApiError(404, " Comment Not Found");
@@ -458,8 +403,7 @@ export const updateCommentService = async (
     throw new ApiError(400, "You are unauthorized to edit");
   }
   // update the comment content and save to DB
-  comment.content = content;
-  await comment.save({ validateBeforeSave: false });
+  await videoRepository.updateComment(comment, content);
   // return the updated comment
   return comment;
 };
@@ -471,24 +415,18 @@ export const deleteCommentService = async (
   commentId: string
 ) => {
   // find the comment and delete
-  const comment = await Comment.findOneAndDelete({
-    _id: commentId,
-    user: userId,
-  });
+  const comment = await videoRepository.deleteComment(commentId, userId);
   // check if the comment exists or not
   if (!comment) {
-    throw new ApiError(404, "Commnet Not found or Unauthorized");
+    throw new ApiError(404, "Comment Not found or Unauthorized");
   }
   // update the comment count in video and also set the comment counter minimum go to zero
-  await Video.updateOne(
-    { _id: comment.video, commentsCount: { $gt: 0 } },
-    { $inc: { commentsCount: -1 } }
-  );
+  await videoRepository.decrementCommentCount(comment.video);
 
   // after deleting the comment, invalidate single video cache
   await invalidateCache(`video-details:${comment.video.toString()}`);
 
-  // return the reponse
+  // return the response
   return true;
 };
 
@@ -496,19 +434,17 @@ export const deleteCommentService = async (
 export const getRelatedVideosService = async (videoId: string) => {
   // get the videoId
   // find the video and select the tags and category
-  const video = await Video.findById(videoId).select("tags category").lean();
+  const video = await videoRepository.findByTagsAndCategory(videoId);
   // check if the video exists or not
   if (!video) {
     throw new ApiError(404, "Video Not Found");
   }
-  // find the related video uising tags or category but do not include this video
-  const relatedVideos = await Video.find({
-    _id: { $ne: videoId },
-    $or: [{ tags: { $in: video.tags } }, { category: video.category }],
-  })
-    .sort({ views: -1 })
-    .limit(20)
-    .select("title thumbnail duration views channel createdAt");
-  // retuern the relted videos
+  // find the related video using tags or category but do not include this video
+  const relatedVideos = await videoRepository.findRelatedVideos(
+    videoId,
+    video.tags,
+    video.category
+  );
+  // return the related videos
   return relatedVideos;
 };
