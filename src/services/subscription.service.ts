@@ -1,7 +1,4 @@
-import { Types } from "mongoose";
-import { Subscription } from "../models/subscription.model";
 import { ApiError } from "../utils/apiError";
-import { Channel } from "../models/channel.model";
 import { invalidateCache } from "./redis.service";
 import { channelRepository } from "../repositories/channel.repository";
 import { subscriptionRepository } from "../repositories/subscription.repository";
